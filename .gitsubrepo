@@ -1,0 +1,12 @@
+[ remote_suffix: .git ]
+[ remote: https://gist.github.com/ ]
+[ base: script ]
+
+git-subrepo             ff72ee00df7b7a359263fc3b15d093b0        master
+
+
+[ remote: https://github.com/ ]
+[ base: ]
+
+jobq                    baishancloud/                           master
+mysqlconnpool           baishancloud/                           master
