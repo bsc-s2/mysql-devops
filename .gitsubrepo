@@ -1,4 +1,3 @@
-[ remote_suffix: .git ]
 [ remote: https://gist.github.com/ ]
 [ base: script ]
 
