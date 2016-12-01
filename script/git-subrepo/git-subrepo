@@ -171,6 +171,14 @@ main()
     local cmd="${1-update}"
     local match="$2"
 
+    case "$cmd" in
+        -h|--help)
+            usage
+            exit 0
+        ;;
+    esac
+
+
     local root=$(git_working_root)
     [ "x$root" = "x" ] && die 'looking for git repo root'
 
@@ -190,7 +198,7 @@ main()
     local localtag=
     while read a b c d; do
 
-        if [ "x$a" = "x" ]; then
+        if [ "x$a" = "x" ] || [ "${a:0:1}" = "#" ]; then
             continue
         fi
 
@@ -215,7 +223,7 @@ main()
                     remote="$c"
                     ;;
                 remote_suffix:)
-                    remote="$c"
+                    remote_suffix="$c"
                     ;;
                 *)
                     echo "invalid tag: $b"
@@ -247,7 +255,7 @@ main()
 
         if test "${url:0:8}" != "https://" && test "${url:0:4}" != "git@"
         then
-            url="$remote$url$remote_suffix"
+            url="${remote}${url}${remote_suffix}"
         fi
 
         fetch_remote "$base$prefix" "$url" "$ref" &
@@ -287,6 +295,52 @@ fetch_remote()
     git fetch --no-tags "$url" "$ref:$localtag" || die fetch "$mes"
     echo "$prefix $url $ref $localtag" >> .gitsubrepo_refs
     dd "Done fetching $mes"
+}
+
+usage()
+{
+    cat <<-END
+usage: git subrepo
+
+    Merge sub git repo into sub-directory in a parent git dir with git-submerge.
+    git-subrepo reads config from ".gitsubrepo" resides in the root of parent
+    git working dir.
+
+    Configure file ".gitsubrepo" syntax:
+
+        # set base of remote url to "https://github.com/"
+        [ remote: https://github.com/ ]
+
+        # set base of local dir to "plugin"
+        [ base: plugin ]
+
+        # <local dir>   <remote uri>            <ref to fetch>
+        gutter          airblade/vim-gitgutter  master
+
+        # if <remote uri> ends with "/", <local dir> will be added after "/"
+        ansible-vim     DavidWittman/           master
+
+        # change base to "root"
+        [ base: ]
+
+        # use a specific commit 1a2b3c4
+        ultisnips       SirVer/                 1a2b3c4
+
+    With above config, "git subrepo" will:
+
+    -   fetch master of https://github.com/DavidWittman/ansible-vim
+        and put it in:
+            <git-root>/plugin/ansible-vim
+
+    -   fetch master of https://github.com/airblade/vim-gitgutter
+        and put it in:
+            <git-root>/plugin/gutter
+
+    -   fetch commit 1a2b3c4 of https://github.com/SirVer/ultisnips
+        and put it in:
+            <git-root>/ultisnips
+
+END
 }
 
 main "$@"
