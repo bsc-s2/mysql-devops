@@ -322,10 +322,7 @@ class MysqlBackup(object):
 
         proc = self.start_tmp_mysql(['--server-id={tmp_server_id}'])
 
-        pool = mysqlconnpool.make( self.mysql_addr )
-
-        with pool() as conn:
-            rst = self.mysql_conn_query(conn, 'start slave')
+        rst = self.mysql_query('start slave')
 
         # with pool() as conn:
         #     rst = self.mysql_conn_query(conn, 'select `CHANNEL_NAME` from `performance_schema`.`replication_connection_status`')
@@ -372,13 +369,10 @@ class MysqlBackup(object):
         # wait for binlog-sync to start
         time.sleep(60)
 
-        pool = mysqlconnpool.make( self.mysql_addr )
-
         while True:
 
-            with pool() as conn:
-                rst = self.mysql_conn_query(conn, 'show slave status')
-
+            # TODO wait all master to be synced
+            rst = self.mysql_query('show slave status')
             rst = rst[0]
 
             if rst['Last_IO_Error'] != '' or rst['Last_SQL_Error'] != '':
@@ -417,13 +411,8 @@ class MysqlBackup(object):
         now = time.time()
         while time.time() - now < 60:
 
-            # a branding new pool must be created, to avoid using old connection
-            pool = mysqlconnpool.make( self.mysql_addr )
-
             try:
-                with pool() as conn:
-                    self.mysql_conn_query(conn, 'show master logs')
-
+                self.mysql_query('show master logs')
                 break
 
             except MySQLdb.OperationalError as e:
@@ -460,10 +449,15 @@ class MysqlBackup(object):
         self.info_r('stop mysql OK')
 
 
-    def mysql_conn_query(self, conn, sql):
+    def mysql_query(sql):
+        pool = mysqlconnpool.make( self.mysql_addr )
+        return self.mysql_pool_query(pool, sql)
+
+
+    def mysql_pool_query(self, pool, sql):
 
         self.debug('mysql query: {sql}'.format(sql=sql))
-        rst = mysql_query(conn, sql)
+        rst = pool.query(sql)
 
         self.debug('mysql query resutl of {sql}: {rst}'.format(
                 sql=repr(sql),
@@ -473,19 +467,11 @@ class MysqlBackup(object):
 
 
     def mysql_insert_test_value(self, v):
-
-        pool = mysqlconnpool.make( self.mysql_addr )
-        with pool() as conn:
-            self.mysql_conn_query(conn, self.bkp_conf['sql_test_insert'].format(v=v))
+        self.mysql_query(self.bkp_conf['sql_test_insert'].format(v=v))
 
 
     def mysql_get_last_2_test_value(self):
-
-        pool = mysqlconnpool.make( self.mysql_addr )
-        with pool() as conn:
-            rst = self.mysql_conn_query(conn, self.bkp_conf['sql_test_get_2'])
-
-        return rst
+        return self.mysql_query(self.bkp_conf['sql_test_get_2'])
 
 
     def extend_backup_conf(self, base_backup_conf):
@@ -540,8 +526,7 @@ class MysqlBackup(object):
         # | mysql-bin.000001 |       154 |
         # +------------------+-----------+
 
-        with self.mysql_conn_pool() as conn:
-            rst = self.mysql_conn_query(conn, 'show master logs')
+        rst = self.mysql_query('show master logs')
 
         return [ x['Log_name'] for x in rst ]
 
