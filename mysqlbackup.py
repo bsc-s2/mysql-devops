@@ -161,13 +161,16 @@ class MysqlBackup(object):
 
         self.chown('{backup_data_dir} {backup_binlog_dir}')
 
-        self.shell_run('create tar-gz',
+        self.shell_run('create tar-gz with des3 encrytion',
                        ("tar"
-                        " -c"
-                        " -C {backup_base}"
-                        " {backup_data_tail}"
-                        " {backup_binlog_tail}"
-                        " | gzip - --fast > {backup_tgz}"
+                        "  -c"
+                        "  -C {backup_base}"
+                        "  {backup_data_tail}"
+                        "  {backup_binlog_tail}"
+                        " | gzip - --fast"
+                        " | openssl des3"
+                        "     -pass file:{cwd}/{des3_password_fn}"
+                        " > {backup_tgz_des3}"
                         )
                        )
 
@@ -175,14 +178,14 @@ class MysqlBackup(object):
 
     def calc_checksum(self):
 
-        self.info_r('calculate checksum of {backup_tgz} ...')
+        self.info_r('calculate checksum of {backup_tgz_des3} ...')
 
-        p = self.render('{backup_tgz}')
-        checksums = get_file_checksum(p, ('md5', 'sha1'))
+        p = self.render('{backup_tgz_des3}')
+        checksums = get_file_checksum(p, ('sha1', ))
 
-        self.bkp_conf['backup_tgz_meta'].update(checksums)
+        self.bkp_conf['backup_tgz_des3_meta'].update(checksums)
 
-        self.info_r('calculate checksum of {backup_tgz} ...')
+        self.info_r('calculate checksum of {backup_tgz_des3} ...')
 
     def upload_backup(self):
 
@@ -197,10 +200,10 @@ class MysqlBackup(object):
                          self.bkp_conf['s3_secret_key'])
 
         # boto adds Content-MD5 automatically
-        extra_args = {'Metadata': self.bkp_conf['backup_tgz_meta']}
+        extra_args = {'Metadata': self.bkp_conf['backup_tgz_des3_meta']}
 
         boto_put(bc,
-                 self.render('{backup_tgz}'),
+                 self.render('{backup_tgz_des3}'),
                  self.render('{s3_bucket}'),
                  self.render('{s3_key}'),
                  extra_args
@@ -230,8 +233,8 @@ class MysqlBackup(object):
         self.apply_local_binlog()
         self.shell_run('copy-back binlog file form {backup_binlog_dir}',
                        ("cp"
-                        " {backup_binlog_dir}/mysql-bin.*"
-                        " {mysql_data_dir}/"
+                        "    {backup_binlog_dir}/mysql-bin.*"
+                        "    {mysql_data_dir}/"
                         ))
 
         self.chown('{mysql_data_dir}')
@@ -259,31 +262,35 @@ class MysqlBackup(object):
 
     def data_check_for_restore(self):
 
-        meta = self.bkp_conf['backup_tgz_meta']
+        meta = self.bkp_conf['backup_tgz_des3_meta']
         if 'sha1' in meta:
             actual_sha1 = get_file_checksum(
-                self.render('{backup_tgz}'), ('sha1', ))['sha1']
+                self.render('{backup_tgz_des3}'), ('sha1', ))['sha1']
             assert meta['sha1'] == actual_sha1
             self.info('sha1 check OK')
 
         elif 'md5' in meta:
             actual_md5 = get_file_checksum(
-                self.render('{backup_tgz}'), ('md5', ))['md5']
+                self.render('{backup_tgz_des3}'), ('md5', ))['md5']
             assert meta['md5'] == actual_md5
             self.info('md5 check OK')
 
     def restore_data(self):
 
-        self.shell_run('unpack {backup_tgz}',
-                       ("tar"
-                        " -xzf {backup_tgz}"
-                        " -C {backup_base}")
+        self.shell_run('unpack {backup_tgz_des3}',
+                       ("cat {backup_tgz_des3}"
+                        " | openssl des3"
+                        "     -d"
+                        "     -pass file:{cwd}/{des3_password_fn}"
+                        " | tar"
+                        "     -xzf -"
+                        "     -C {backup_base}")
                        )
 
         self.shell_run('copy-back from {backup_data_dir}',
                        ("innobackupex"
-                        " --defaults-file={backup_my_cnf}"
-                        " --copy-back {backup_data_dir}")
+                        "  --defaults-file={backup_my_cnf}"
+                        "  --copy-back {backup_data_dir}")
                        )
 
     def download_backup(self):
@@ -302,17 +309,17 @@ class MysqlBackup(object):
                          self.bkp_conf['s3_access_key'],
                          self.bkp_conf['s3_secret_key'])
         resp = boto_get(bc,
-                        self.render('{backup_tgz}'),
+                        self.render('{backup_tgz_des3}'),
                         self.render('{s3_bucket}'),
                         self.render('{s3_key}')
                         )
 
-        self.info_r('downloaded backup to {backup_tgz}')
+        self.info_r('downloaded backup to {backup_tgz_des3}')
 
         meta = resp.get('Metadata')
         self.info('meta: ' + json.dumps(resp.get('Metadata'), indent=2))
 
-        self.bkp_conf['backup_tgz_meta'] = meta
+        self.bkp_conf['backup_tgz_des3_meta'] = meta
 
         self.info_r('download backup from s3://{s3_bucket}/{s3_key} OK')
 
@@ -339,9 +346,9 @@ class MysqlBackup(object):
 
         self.shell_run('apply binlog not in backup from {backup_binlog_dir}',
                        ('bin/mysqlbinlog'
-                        ' --disable-log-bin'
-                        ' --exclude-gtids="{gtid_set_str}"'
-                        ' {binlog_fns}'
+                        '    --disable-log-bin'
+                        '    --exclude-gtids="{gtid_set_str}"'
+                        '    {binlog_fns}'
                         ' | bin/mysql --socket={mysql_socket} '
                         ),
                        binlog_fns=' '.join(binlog_fns),
@@ -371,38 +378,6 @@ class MysqlBackup(object):
         proc = self.start_tmp_mysql(['--server-id={tmp_server_id}'])
 
         rst = self.mysql_query('start slave')
-
-        # with pool() as conn:
-        #     rst = self.mysql_conn_query(conn, 'select `CHANNEL_NAME` from `performance_schema`.`replication_connection_status`')
-
-        # if len(rst) == 0:
-        #     # there is no replication setup on this backup.
-        #     self.info('no replication setup, skip remote binlog sync')
-
-        #     self.stop_tmp_mysql(proc)
-        #     self.info('apply remote binlog OK')
-        #     return
-
-        # with pool() as conn:
-
-        #     rst = self.mysql_conn_query(conn, 'select `CHANNEL_NAME` from `performance_schema`.`replication_connection_status`')
-        #     if len(rst) == 0:
-        #         # there is no replication setup on this backup.
-        #         self.info('no replication setup, skip remote binlog sync')
-
-        #         self.stop_tmp_mysql(proc)
-        #         self.info('apply remote binlog OK')
-        #         return
-
-        #     # after "reset slave", "start slave" does not work.
-        #     # we have to start slave for each channel one by one.
-
-        #     rst = self.mysql_conn_query(conn, 'flush local relay logs')
-        #     rst = self.mysql_conn_query(conn, 'reset slave')
-
-        #     rst = self.mysql_conn_query(conn, 'select `CHANNEL_NAME` from `performance_schema`.`replication_connection_status`')
-        #     for rr in rst:
-        #         rst = self.mysql_conn_query(conn, 'start slave for channel "{c}"'.format(c=rr['CHANNEL_NAME']))
 
         # wait for binlog-sync to start
         time.sleep(1)
@@ -521,8 +496,9 @@ class MysqlBackup(object):
 
         bkp_conf = copy.deepcopy(base_backup_conf)
         bkp_conf.update({
-            'backup_tgz_meta': {},
-            # ('time_str',         cdate("%Y_%m_%d_%H_%M_%S")),
+            'cwd':                  os.getcwd(),
+            'des3_password_fn':     'des3_password',
+            'backup_tgz_des3_meta': {},
         })
 
         bkp_conf.setdefault('date_str',  cdate("%Y_%m_%d"))
@@ -543,17 +519,14 @@ class MysqlBackup(object):
 
             ('backup_data_tail',                   "mysql-{port}-backup"),
             ('backup_data_dir',      "{backup_base}/mysql-{port}-backup"),
-            ('backup_my_cnf',
-             "{backup_base}/mysql-{port}-backup/my.cnf"),
-            ('backup_tgz',           "{backup_base}/mysql-{port}.tgz"),
+            ('backup_my_cnf',        "{backup_base}/mysql-{port}-backup/my.cnf"),
+            ('backup_tgz_des3',      "{backup_base}/mysql-{port}.tgz.des3"),
 
             ('backup_binlog_tail',                 "mysql-{port}-binlog"),
             ('backup_binlog_dir',    "{backup_base}/mysql-{port}-binlog"),
 
-            ('s3_key',
-             "mysql-backup-daily/{port}/{date_str}/mysql-{port}.tgz"),
-            ('mes',
-             "{host}:{port} [{instance_id}] {mysql_data_dir}"),
+            ('s3_key',               "mysql-backup-daily/{port}/{date_str}/mysql-{port}.tgz"),
+            ('mes',                  "{host}:{port} [{instance_id}] {mysql_data_dir}"),
         ]
 
         for k, v in ptn:
@@ -858,13 +831,16 @@ if __name__ == "__main__":
 
     init_logger()
 
-    def make_mb():
-        _conf = sys.argv[2]
-        conf = json.loads(_conf)
+    def make_mb(conf_path):
+
+        with open(conf_path, 'r') as f:
+            content = f.read()
+
+        conf = json.loads(content)
         mb = MysqlBackup(conf)
         return mb
 
-    mb = make_mb()
+    mb = make_mb(sys.argv[2])
 
     try:
         if sys.argv[1] == 'backup':

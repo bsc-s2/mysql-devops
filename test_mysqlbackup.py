@@ -17,12 +17,12 @@ if __name__ == "__main__":
     mysqlbackup.init_logger()
 
     conf = {
-        'mysql_base': '/usr/local/mysql-5.7.13',
+        'mysql_base':  '/usr/local/mysql-5.7.13',
 
-        'host': '127.0.0.1',
-        'data_base': '/data1',
+        'host':        '127.0.0.1',
+        'data_base':   '/data1',
         'backup_base': '/data1/backup',
-        'port': 3309,
+        'port':        3309,
         'instance_id': '1',
 
         # optional, for test only
