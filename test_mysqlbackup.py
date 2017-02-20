@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import sys
 import logging
+import sys
 import time
 
 import MySQLdb
 
 import mysqlbackup
-
 
 logger = logging.getLogger(__name__)
 
@@ -18,27 +17,27 @@ if __name__ == "__main__":
     mysqlbackup.init_logger()
 
     conf = {
-            'mysql_base'  : '/usr/local/mysql-5.7.13',
+        'mysql_base': '/usr/local/mysql-5.7.13',
 
-            'host'        : '127.0.0.1',
-            'data_base'   : '/data1',
-            'backup_base' : '/data1/backup',
-            'port'        : 3309,
-            'instance_id' : '1',
+        'host': '127.0.0.1',
+        'data_base': '/data1',
+        'backup_base': '/data1/backup',
+        'port': 3309,
+        'instance_id': '1',
 
-            # optional, for test only
-            'sql_test_insert': ('insert into `xp2`.`heartbeat`'
-                                ' (`key`, `value`, `ts`)'
-                                ' values'
-                                ' ("test-backup", "{v}", "{v}")'),
+        # optional, for test only
+        'sql_test_insert': ('insert into `xp2`.`heartbeat`'
+                            ' (`key`, `value`, `ts`)'
+                            ' values'
+                            ' ("test-backup", "{v}", "{v}")'),
 
-            'sql_test_get_2': 'select `value` from `xp2`.`heartbeat` order by `_id` desc limit 2',
+        'sql_test_get_2': 'select `value` from `xp2`.`heartbeat` order by `_id` desc limit 2',
 
-            # optional, for backup to remote storage
-            's3_host'       : '127.0.0.1',
-            's3_bucket'     : 'mysql-backup',
-            's3_access_key' : 's2kjq4d8ml56brfnxagz',
-            's3_secret_key' : 'UmF2/KNAsZbPB4RnCEUE47vFsui5zG3RxhXdWxtV',
+        # optional, for backup to remote storage
+        's3_host': '127.0.0.1',
+        's3_bucket': 'mysql-backup',
+        's3_access_key': 's2kjq4d8ml56brfnxagz',
+        's3_secret_key': 'UmF2/KNAsZbPB4RnCEUE47vFsui5zG3RxhXdWxtV',
     }
 
     mb = mysqlbackup.MysqlBackup(conf)
@@ -80,7 +79,7 @@ if __name__ == "__main__":
         value_after_data = str(time.time())
         mb.mysql_insert_test_value(value_after_data)
         logger.info('inserted: {v} after data backup'.format(
-                v=value_after_data))
+            v=value_after_data))
 
         mb.backup_binlog()
         mb.calc_checksum()
@@ -91,7 +90,7 @@ if __name__ == "__main__":
         value_after_binlog = str(time.time())
         mb.mysql_insert_test_value(value_after_binlog)
         logger.info('inserted: {v} after binlog backup'.format(
-                v=value_after_binlog))
+            v=value_after_binlog))
 
         logger.info('wait for binlog to sync')
         time.sleep(1)
@@ -108,7 +107,8 @@ if __name__ == "__main__":
                 break
 
         logger.info('remove mysql data dir')
-        mysqlbackup._shell_run(mb.render('rm -rf {mysql_data_dir} {backup_data_dir} {backup_binlog_dir}'))
+        mysqlbackup._shell_run(
+            mb.render('rm -rf {mysql_data_dir} {backup_data_dir} {backup_binlog_dir}'))
 
         mb.restore()
 
@@ -117,11 +117,12 @@ if __name__ == "__main__":
 
         rst = mb.mysql_get_last_2_test_value()
 
-        assert rst[0].values()[0] == value_after_binlog, 'write after binlog backup should be seen: ' + str(value_after_binlog)
-        assert rst[1].values()[0] == value_after_data, 'write after data backup should be seen: ' + str(value_after_data)
+        assert rst[0].values()[
+            0] == value_after_binlog, 'write after binlog backup should be seen: ' + str(value_after_binlog)
+        assert rst[1].values()[
+            0] == value_after_data, 'write after data backup should be seen: ' + str(value_after_data)
 
         mb.stop_tmp_mysql(proc)
-
 
     else:
         raise ValueError('invalid command: ' + sys.argv[1])

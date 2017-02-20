@@ -4,8 +4,8 @@
 import logging
 import sys
 
-import mysqlbackup
 import conf
+import mysqlbackup
 
 if __name__ == "__main__":
 
@@ -21,14 +21,14 @@ if __name__ == "__main__":
     for port in ports:
         conf = restore_conf.copy()
         conf.update({
-                'date_str': '2016_10_20',
-                'port': port,
+            'date_str': '2016_10_20',
+            'port': port,
 
-                # we use instance_is=2, although in the backup, 'server-id' in my.cnf is still 1xxxx.
-                # We will update my.cnf with ansible books after data is restored.
-                'instance_id': '2',
+            # we use instance_is=2, although in the backup, 'server-id' in my.cnf is still 1xxxx.
+            # We will update my.cnf with ansible books after data is
+            # restored.
+            'instance_id': '2',
         })
 
         mb = mysqlbackup.MysqlBackup(conf)
         mb.restore()
-

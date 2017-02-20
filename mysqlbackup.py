@@ -7,32 +7,38 @@ required:
     xtrabackup version > 2.4 (for MySQL 5.7)
 '''
 
-import os
+import copy
 import errno
-import signal
-import sys
+import hashlib
+import json
 import logging
 import logging.handlers
+import os
+import signal
 import subprocess
+import sys
 import time
-import copy
-import json
-import hashlib
 
-import MySQLdb
 import boto3
-from botocore.client import Config
+import MySQLdb
 from boto3.s3.transfer import TransferConfig
+from botocore.client import Config
 
-import mysqlconnpool
-
+from pykit import mysqlconnpool
 
 logger = logging.getLogger(__name__)
 
 
-class MysqlBackupError(Exception): pass
-class MysqlRestoreError(Exception): pass
-class MysqlIsAlive(Exception): pass
+class MysqlBackupError(Exception):
+    pass
+
+
+class MysqlRestoreError(Exception):
+    pass
+
+
+class MysqlIsAlive(Exception):
+    pass
 
 
 class MysqlBackup(object):
@@ -41,11 +47,10 @@ class MysqlBackup(object):
 
         self.bkp_conf = self.extend_backup_conf(bkp_conf)
 
-        self.mysql_addr = { 'unix_socket': self.bkp_conf['mysql_socket'],
-                            'user': 'root'}
+        self.mysql_addr = {'unix_socket': self.bkp_conf['mysql_socket'],
+                           'user': 'root'}
 
-        self.mysql_conn_pool = mysqlconnpool.make( self.mysql_addr )
-
+        self.mysql_conn_pool = mysqlconnpool.make(self.mysql_addr)
 
     def setup_replication(self, source_list):
 
@@ -56,13 +61,13 @@ class MysqlBackup(object):
             proc = self.start_tmp_mysql()
 
         sqls_reset = [
-                'STOP SLAVE',
+            'STOP SLAVE',
 
-                'SET GLOBAL master_info_repository = "TABLE"',
-                'SET GLOBAL relay_log_info_repository = "TABLE"',
+            'SET GLOBAL master_info_repository = "TABLE"',
+            'SET GLOBAL relay_log_info_repository = "TABLE"',
 
-                'RESET SLAVE ALL FOR CHANNEL ""',
-                'RESET SLAVE ALL',
+            'RESET SLAVE ALL FOR CHANNEL ""',
+            'RESET SLAVE ALL',
         ]
 
         try:
@@ -71,13 +76,13 @@ class MysqlBackup(object):
 
             for src in source_list:
                 sql = (
-                        'CHANGE MASTER TO'
-                        '      MASTER_HOST="{host}"'
-                        '    , MASTER_PORT={port}'
-                        '    , MASTER_USER="{user}"'
-                        '    , MASTER_PASSWORD="{password}"'
-                        '    , MASTER_AUTO_POSITION=1'
-                        ' FOR CHANNEL "{channel}"'
+                    'CHANGE MASTER TO'
+                    '      MASTER_HOST="{host}"'
+                    '    , MASTER_PORT={port}'
+                    '    , MASTER_USER="{user}"'
+                    '    , MASTER_PASSWORD="{password}"'
+                    '    , MASTER_AUTO_POSITION=1'
+                    ' FOR CHANNEL "{channel}"'
                 ).format(**src)
 
                 self.mysql_query(sql)
@@ -88,8 +93,6 @@ class MysqlBackup(object):
         finally:
             if not alive:
                 self.stop_tmp_mysql(proc)
-
-
 
     def backup(self):
 
@@ -113,20 +116,19 @@ class MysqlBackup(object):
                         " --slave-info"
                         " --no-timestamp"
                         " {backup_data_dir}")
-        )
+                       )
 
         self.shell_run('apply log',
                        ("innobackupex"
                         " --apply-log"
                         " {backup_data_dir}")
-        )
+                       )
 
         self.shell_run('backup {mysql_my_cnf}',
                        ("cp"
                         " {mysql_my_cnf}"
                         " {backup_data_dir}/")
-        )
-
+                       )
 
     def backup_binlog(self):
 
@@ -148,15 +150,14 @@ class MysqlBackup(object):
                         ' --read-from-remote-server'
                         ' --result-file={backup_binlog_dir}/'
                         ' {binlog_fns}'
-                       ),
+                        ),
                        binlog_fns=' '.join(binlog_fns),
                        cwd=self.bkp_conf['mysql_base']
-        )
+                       )
 
         self.info('backup binlog index')
         with open(self.render("{backup_binlog_dir}/mysql-bin.index"), 'w') as f:
             f.write('\n'.join(['./' + x for x in binlog_fns]) + '\n')
-
 
         self.chown('{backup_data_dir} {backup_binlog_dir}')
 
@@ -167,11 +168,10 @@ class MysqlBackup(object):
                         " {backup_data_tail}"
                         " {backup_binlog_tail}"
                         " | gzip - --fast > {backup_tgz}"
+                        )
                        )
-        )
 
         self.info_r('backup binlog {backup_binlog_dir} OK')
-
 
     def calc_checksum(self):
 
@@ -183,7 +183,6 @@ class MysqlBackup(object):
         self.bkp_conf['backup_tgz_meta'].update(checksums)
 
         self.info_r('calculate checksum of {backup_tgz} ...')
-
 
     def upload_backup(self):
 
@@ -198,17 +197,16 @@ class MysqlBackup(object):
                          self.bkp_conf['s3_secret_key'])
 
         # boto adds Content-MD5 automatically
-        extra_args = { 'Metadata' : self.bkp_conf['backup_tgz_meta'] }
+        extra_args = {'Metadata': self.bkp_conf['backup_tgz_meta']}
 
         boto_put(bc,
                  self.render('{backup_tgz}'),
                  self.render('{s3_bucket}'),
                  self.render('{s3_key}'),
                  extra_args
-        )
+                 )
 
         self.info_r('backup to s3://{s3_bucket}/{s3_key} OK')
-
 
     def restore(self):
 
@@ -218,7 +216,6 @@ class MysqlBackup(object):
         self.apply_remote_binlog()
 
         self.info("restore OK")
-
 
     def restore_from_backup(self):
 
@@ -235,10 +232,9 @@ class MysqlBackup(object):
                        ("cp"
                         " {backup_binlog_dir}/mysql-bin.*"
                         " {mysql_data_dir}/"
-                       ))
+                        ))
 
         self.chown('{mysql_data_dir}')
-
 
     def assert_instance_is_down(self):
 
@@ -251,7 +247,6 @@ class MysqlBackup(object):
             else:
                 raise
 
-
     def is_instance_alive(self):
         try:
             self.list_binlog_fns()
@@ -262,20 +257,20 @@ class MysqlBackup(object):
             else:
                 raise
 
-
     def data_check_for_restore(self):
 
         meta = self.bkp_conf['backup_tgz_meta']
         if 'sha1' in meta:
-            actual_sha1 = get_file_checksum(self.render('{backup_tgz}'), ('sha1', ))['sha1']
+            actual_sha1 = get_file_checksum(
+                self.render('{backup_tgz}'), ('sha1', ))['sha1']
             assert meta['sha1'] == actual_sha1
             self.info('sha1 check OK')
 
         elif 'md5' in meta:
-            actual_md5 = get_file_checksum(self.render('{backup_tgz}'), ('md5', ))['md5']
+            actual_md5 = get_file_checksum(
+                self.render('{backup_tgz}'), ('md5', ))['md5']
             assert meta['md5'] == actual_md5
             self.info('md5 check OK')
-
 
     def restore_data(self):
 
@@ -283,14 +278,13 @@ class MysqlBackup(object):
                        ("tar"
                         " -xzf {backup_tgz}"
                         " -C {backup_base}")
-        )
+                       )
 
         self.shell_run('copy-back from {backup_data_dir}',
                        ("innobackupex"
                         " --defaults-file={backup_my_cnf}"
                         " --copy-back {backup_data_dir}")
-        )
-
+                       )
 
     def download_backup(self):
 
@@ -308,10 +302,10 @@ class MysqlBackup(object):
                          self.bkp_conf['s3_access_key'],
                          self.bkp_conf['s3_secret_key'])
         resp = boto_get(bc,
-                 self.render('{backup_tgz}'),
-                 self.render('{s3_bucket}'),
-                 self.render('{s3_key}')
-        )
+                        self.render('{backup_tgz}'),
+                        self.render('{s3_bucket}'),
+                        self.render('{s3_key}')
+                        )
 
         self.info_r('downloaded backup to {backup_tgz}')
 
@@ -321,7 +315,6 @@ class MysqlBackup(object):
         self.bkp_conf['backup_tgz_meta'] = meta
 
         self.info_r('download backup from s3://{s3_bucket}/{s3_key} OK')
-
 
     def apply_local_binlog(self):
 
@@ -333,13 +326,14 @@ class MysqlBackup(object):
         proc = self.start_tmp_mysql()
 
         binlog_fns = os.listdir(self.render('{backup_binlog_dir}'))
-        binlog_fns = [ x for x in binlog_fns
-                       if x != 'mysql-bin.index' ]
+        binlog_fns = [x for x in binlog_fns
+                      if x != 'mysql-bin.index']
         binlog_fns.sort()
-        binlog_fns = [ self.render('{backup_binlog_dir}/') + x
-                       for x in binlog_fns ]
+        binlog_fns = [self.render('{backup_binlog_dir}/') + x
+                      for x in binlog_fns]
 
-        self.info('apply only-in-binlog events back to instance, from: ' + repr(binlog_fns))
+        self.info(
+            'apply only-in-binlog events back to instance, from: ' + repr(binlog_fns))
 
         last_binlog_file, last_binlog_pos, gtid_set = self.get_backup_binlog_info()
 
@@ -349,15 +343,14 @@ class MysqlBackup(object):
                         ' --exclude-gtids="{gtid_set_str}"'
                         ' {binlog_fns}'
                         ' | bin/mysql --socket={mysql_socket} '
-                       ),
+                        ),
                        binlog_fns=' '.join(binlog_fns),
                        gtid_set_str=make_gtid_set_str(gtid_set),
                        cwd=self.bkp_conf['mysql_base']
-        )
+                       )
 
         self.stop_tmp_mysql(proc)
         self.info_r('apply only-in-binlog events OK')
-
 
     def apply_remote_binlog(self):
 
@@ -418,7 +411,6 @@ class MysqlBackup(object):
         self.stop_tmp_mysql(proc)
         self.info('apply remote binlog OK')
 
-
     def wait_remote_binlog(self):
 
         # wait for binlog-sync to start
@@ -431,7 +423,8 @@ class MysqlBackup(object):
             rst = rst[0]
 
             if rst['Last_IO_Error'] != '' or rst['Last_SQL_Error'] != '':
-                raise MysqlRestoreError(rst['Last_IO_Error'] + ' ' + rst['Last_SQL_Error'])
+                raise MysqlRestoreError(
+                    rst['Last_IO_Error'] + ' ' + rst['Last_SQL_Error'])
 
             if rst['Slave_IO_Running'] != 'Yes' or rst['Slave_SQL_Running'] != 'Yes':
                 raise MysqlRestoreError('IO/SQL not running')
@@ -439,7 +432,8 @@ class MysqlBackup(object):
             if rst['Slave_IO_State'] == 'Waiting for master to send event':
 
                 if int(rst['Seconds_Behind_Master']) < 1:
-                    # there could be events on remote created in less than 1 second
+                    # there could be events on remote created in less than 1
+                    # second
                     time.sleep(1)
                     break
 
@@ -450,12 +444,12 @@ class MysqlBackup(object):
 
             time.sleep(1)
 
-
     def start_tmp_mysql(self, opts=()):
 
         self.info("start mysqld ...")
 
-        cmd = self.render('./bin/mysqld --defaults-file={mysql_my_cnf} ' + (' '.join(opts)))
+        cmd = self.render(
+            './bin/mysqld --defaults-file={mysql_my_cnf} ' + (' '.join(opts)))
         cwd = self.bkp_conf['mysql_base']
         proc = subprocess.Popen(cmd,
                                 cwd=cwd,
@@ -485,7 +479,6 @@ class MysqlBackup(object):
 
         return proc
 
-
     def stop_tmp_mysql(self, proc):
 
         self.info_r('stop mysql ...')
@@ -503,11 +496,9 @@ class MysqlBackup(object):
         time.sleep(0.5)
         self.info_r('stop mysql OK')
 
-
-    def mysql_query(sql):
-        pool = mysqlconnpool.make( self.mysql_addr )
+    def mysql_query(self, sql):
+        pool = mysqlconnpool.make(self.mysql_addr)
         return self.mysql_pool_query(pool, sql)
-
 
     def mysql_pool_query(self, pool, sql):
 
@@ -515,53 +506,54 @@ class MysqlBackup(object):
         rst = pool.query(sql)
 
         self.debug('mysql query resutl of {sql}: {rst}'.format(
-                sql=repr(sql),
-                rst=json.dumps(rst, indent=2)))
+            sql=repr(sql),
+            rst=json.dumps(rst, indent=2)))
 
         return rst
-
 
     def mysql_insert_test_value(self, v):
         self.mysql_query(self.bkp_conf['sql_test_insert'].format(v=v))
 
-
     def mysql_get_last_2_test_value(self):
         return self.mysql_query(self.bkp_conf['sql_test_get_2'])
-
 
     def extend_backup_conf(self, base_backup_conf):
 
         bkp_conf = copy.deepcopy(base_backup_conf)
         bkp_conf.update({
-                'backup_tgz_meta': {},
-                # ('time_str',         cdate("%Y_%m_%d_%H_%M_%S")),
+            'backup_tgz_meta': {},
+            # ('time_str',         cdate("%Y_%m_%d_%H_%M_%S")),
         })
 
         bkp_conf.setdefault('date_str',  cdate("%Y_%m_%d"))
 
         ptn = [
-                ('mysql_user',           "mysql-{port}"),
-                ('mysql_user_group',     "mysql"),
+            ('mysql_user',           "mysql-{port}"),
+            ('mysql_user_group',     "mysql"),
 
-                ('mysql_socket',         "/tmp/mysql-{port}.sock"),
-                ('mysql_pid_path',       "/var/run/mysqld/mysqld-{port}.pid"),
+            ('mysql_socket',         "/tmp/mysql-{port}.sock"),
+            ('mysql_pid_path',       "/var/run/mysqld/mysqld-{port}.pid"),
 
-                ('mysql_data_dir',       "{data_base}/mysql-{port}"),
-                ('mysql_my_cnf',         "{data_base}/mysql-{port}/my.cnf"),
+            ('mysql_data_dir',       "{data_base}/mysql-{port}"),
+            ('mysql_my_cnf',         "{data_base}/mysql-{port}/my.cnf"),
 
-                # use a different server-id to accept binlog created on this instance.
-                ('tmp_server_id',        "{instance_id}00{port}"),
+            # use a different server-id to accept binlog created on this
+            # instance.
+            ('tmp_server_id',        "{instance_id}00{port}"),
 
-                ('backup_data_tail',                   "mysql-{port}-backup"),
-                ('backup_data_dir',      "{backup_base}/mysql-{port}-backup"),
-                ('backup_my_cnf',        "{backup_base}/mysql-{port}-backup/my.cnf"),
-                ('backup_tgz',           "{backup_base}/mysql-{port}.tgz"),
+            ('backup_data_tail',                   "mysql-{port}-backup"),
+            ('backup_data_dir',      "{backup_base}/mysql-{port}-backup"),
+            ('backup_my_cnf',
+             "{backup_base}/mysql-{port}-backup/my.cnf"),
+            ('backup_tgz',           "{backup_base}/mysql-{port}.tgz"),
 
-                ('backup_binlog_tail',                 "mysql-{port}-binlog"),
-                ('backup_binlog_dir',    "{backup_base}/mysql-{port}-binlog"),
+            ('backup_binlog_tail',                 "mysql-{port}-binlog"),
+            ('backup_binlog_dir',    "{backup_base}/mysql-{port}-binlog"),
 
-                ('s3_key',               "mysql-backup-daily/{port}/{date_str}/mysql-{port}.tgz"),
-                ('mes',                  "{host}:{port} [{instance_id}] {mysql_data_dir}"),
+            ('s3_key',
+             "mysql-backup-daily/{port}/{date_str}/mysql-{port}.tgz"),
+            ('mes',
+             "{host}:{port} [{instance_id}] {mysql_data_dir}"),
         ]
 
         for k, v in ptn:
@@ -571,7 +563,6 @@ class MysqlBackup(object):
             logger.info('backup conf: {k:<20} : {v}'.format(k=k, v=v))
 
         return bkp_conf
-
 
     def list_binlog_fns(self):
 
@@ -583,8 +574,7 @@ class MysqlBackup(object):
 
         rst = self.mysql_query('show master logs')
 
-        return [ x['Log_name'] for x in rst ]
-
+        return [x['Log_name'] for x in rst]
 
     def get_backup_binlog_info(self):
 
@@ -624,7 +614,6 @@ class MysqlBackup(object):
 
         return last_binlog_file, last_binlog_pos, gtid_set
 
-
     def chown(self, path_or_key):
 
         # self.chown("/a/b/c")
@@ -635,8 +624,7 @@ class MysqlBackup(object):
                        ("chown"
                         " -R {mysql_user}:{mysql_user_group}"
                         " " + path_or_key)
-        )
-
+                       )
 
     def shell_run(self, mes, cmd, cwd=None, **kwarg):
 
@@ -658,41 +646,32 @@ class MysqlBackup(object):
 
         self.info_r(mes + ' OK', **kwarg)
 
-
     def render(self, s, **kwarg):
         a = {}
         a.update(self.bkp_conf)
         a.update(kwarg)
         return s.format(**a)
 
-
     def error_r(self, s, **kwarg):
         logger.error(self.bkp_conf['mes'] + ': ' + self.render(s, **kwarg))
-
 
     def warn_r(self, s, **kwarg):
         logger.warn(self.bkp_conf['mes'] + ': ' + self.render(s, **kwarg))
 
-
     def info_r(self, s, **kwarg):
         logger.info(self.bkp_conf['mes'] + ': ' + self.render(s, **kwarg))
-
 
     def debug_r(self, s, **kwarg):
         logger.debug(self.bkp_conf['mes'] + ': ' + self.render(s, **kwarg))
 
-
     def error(self, s):
         logger.error(self.bkp_conf['mes'] + ': ' + s)
-
 
     def warn(self, s):
         logger.warn(self.bkp_conf['mes'] + ': ' + s)
 
-
     def info(self, s):
         logger.info(self.bkp_conf['mes'] + ': ' + s)
-
 
     def debug(self, s):
         logger.debug(self.bkp_conf['mes'] + ': ' + s)
@@ -701,14 +680,15 @@ class MysqlBackup(object):
 def make_gtid_set_str(gtid_set):
     ranges = []
     for uuid, rng in gtid_set.items():
-        ranges.append('{uuid}:{start}-{end}'.format(uuid=uuid, start=rng[0], end=rng[1]))
+        ranges.append('{uuid}:{start}-{end}'.format(uuid=uuid,
+                                                    start=rng[0], end=rng[1]))
     return ','.join(ranges)
 
 
 def mysql_query(conn, sql):
 
     cur = conn.cursor(MySQLdb.cursors.DictCursor)
-    cur.execute( sql )
+    cur.execute(sql)
     rst = cur.fetchall()
     cur.close()
 
@@ -773,12 +753,12 @@ def boto_client(host, access_key, secret_key):
 
     session = boto3.session.Session()
     client = session.client(
-            's3',
-            use_ssl               = False,
-            endpoint_url          = "http://%s:%s" % (host, 80),
-            aws_access_key_id     = access_key,
-            aws_secret_access_key = secret_key,
-            config                = Config(s3={'addressing_style': 'path'}),
+        's3',
+        use_ssl=False,
+        endpoint_url="http://%s:%s" % (host, 80),
+        aws_access_key_id=access_key,
+        aws_secret_access_key=secret_key,
+        config=Config(s3={'addressing_style': 'path'}),
     )
 
     return client
@@ -786,18 +766,18 @@ def boto_client(host, access_key, secret_key):
 
 def boto_put(cli, fpath, bucket_name, key_name, extra_args):
 
-    MB=1024**2
-    GB=1024**3
+    MB = 1024**2
+    GB = 1024**3
 
-    config = TransferConfig( multipart_threshold=1*GB,
-                             multipart_chunksize=32*MB, )
+    config = TransferConfig(multipart_threshold=1 * GB,
+                            multipart_chunksize=32 * MB, )
 
     cli.upload_file(
-            Filename    = fpath,
-            Bucket      = bucket_name,
-            Key         = key_name,
-            Config      = config,
-            ExtraArgs   = extra_args,
+        Filename=fpath,
+        Bucket=bucket_name,
+        Key=key_name,
+        Config=config,
+        ExtraArgs=extra_args,
     )
 
 
@@ -846,7 +826,7 @@ def boto_get(cli, fpath, bucket_name, key_name):
 
     with open(fpath, 'wb') as f:
         while True:
-            buf = obj['Body'].read(1024*1024*8)
+            buf = obj['Body'].read(1024 * 1024 * 8)
             if buf == '':
                 break
 
@@ -861,17 +841,18 @@ def init_logger(fn=None, lvl=logging.DEBUG):
 
     logging.basicConfig(stream=sys.stdout, level=lvl)
 
-    logger.setLevel( lvl )
+    logger.setLevel(lvl)
 
-    file_path = os.path.join( '/tmp/{n}.out'.format(n=fn or 'mysqlbackup') )
-    handler = logging.handlers.WatchedFileHandler( file_path )
+    file_path = os.path.join('/tmp/{n}.out'.format(n=fn or 'mysqlbackup'))
+    handler = logging.handlers.WatchedFileHandler(file_path)
 
-    _formatter = logging.Formatter("[%(asctime)s,%(process)d-%(thread)d,%(filename)s,%(lineno)d,%(levelname)s] %(message)s")
+    _formatter = logging.Formatter(
+        "[%(asctime)s,%(process)d-%(thread)d,%(filename)s,%(lineno)d,%(levelname)s] %(message)s")
 
     handler.setFormatter(_formatter)
 
     logger.handlers = []
-    logger.addHandler( handler )
+    logger.addHandler(handler)
 
 if __name__ == "__main__":
 
