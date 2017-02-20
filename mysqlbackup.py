@@ -47,6 +47,50 @@ class MysqlBackup(object):
         self.mysql_conn_pool = mysqlconnpool.make( self.mysql_addr )
 
 
+    def setup_replication(self, source_list):
+
+        alive = self.is_instance_alive()
+        proc = None
+
+        if not alive:
+            proc = self.start_tmp_mysql()
+
+        sqls_reset = [
+                'STOP SLAVE',
+
+                'SET GLOBAL master_info_repository = "TABLE"',
+                'SET GLOBAL relay_log_info_repository = "TABLE"',
+
+                'RESET SLAVE ALL FOR CHANNEL ""',
+                'RESET SLAVE ALL',
+        ]
+
+        try:
+            for sql in sqls_reset:
+                self.mysql_query(sql)
+
+            for src in source_list:
+                sql = (
+                        'CHANGE MASTER TO'
+                        '      MASTER_HOST="{host}"'
+                        '    , MASTER_PORT={port}'
+                        '    , MASTER_USER="{user}"'
+                        '    , MASTER_PASSWORD="{password}"'
+                        '    , MASTER_AUTO_POSITION=1'
+                        ' FOR CHANNEL "{channel}"'
+                ).format(**src)
+
+                self.mysql_query(sql)
+
+            if alive:
+                self.mysql_query('START SLAVE')
+
+        finally:
+            if not alive:
+                self.stop_tmp_mysql(proc)
+
+
+
     def backup(self):
 
         self.info("backup ...")
@@ -204,6 +248,17 @@ class MysqlBackup(object):
         except MySQLdb.OperationalError as e:
             if e[0] == 2002:
                 pass
+            else:
+                raise
+
+
+    def is_instance_alive(self):
+        try:
+            self.list_binlog_fns()
+            return True
+        except MySQLdb.OperationalError as e:
+            if e[0] == 2002:
+                return False
             else:
                 raise
 
