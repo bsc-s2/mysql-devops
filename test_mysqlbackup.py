@@ -36,8 +36,9 @@ if __name__ == "__main__":
         # optional, for backup to remote storage
         's3_host': '127.0.0.1',
         's3_bucket': 'mysql-backup',
-        's3_access_key': 's2kjq4d8ml56brfnxagz',
-        's3_secret_key': 'UmF2/KNAsZbPB4RnCEUE47vFsui5zG3RxhXdWxtV',
+        's3_access_key': '3buylpa47d26skigwhm1',
+        's3_secret_key': 'BPM5MIkmnb8n9ScE+DW80BK3GBZ1hekRPXFOW5hv',
+        'date_str': '2017_03_03',
     }
 
     mb = mysqlbackup.MysqlBackup(conf)
