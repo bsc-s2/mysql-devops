@@ -881,9 +881,10 @@ def load_args_conf():
     )
 
     for k in conf_keys:
-        if args[k] is not None:
-            conf[k] = args[k]
-            logger.info('add config from command line: {k}={v}'.format(k=k, v=args[k]))
+        v = getattr(args, k)
+        if v is not None:
+            conf[k] = v
+            logger.info('add config from command line: {k}={v}'.format(k=k, v=v))
 
     logger.info('conf={c}'.format(c=conf))
 
