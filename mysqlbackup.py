@@ -171,7 +171,7 @@ class MysqlBackup(object):
                         "  {backup_binlog_tail}"
                         " | gzip - --fast"
                         " | openssl des3"
-                        "     -pass file:{cwd}/{des3_password_fn}"
+                        "     -pass file:{conf_base}/{des3_password_fn}"
                         " > {backup_tgz_des3}"
                         )
                        )
@@ -283,7 +283,7 @@ class MysqlBackup(object):
                        ("cat {backup_tgz_des3}"
                         " | openssl des3"
                         "     -d"
-                        "     -pass file:{cwd}/{des3_password_fn}"
+                        "     -pass file:{conf_base}/{des3_password_fn}"
                         " | tar"
                         "     -xzf -"
                         "     -C {backup_base}")
