@@ -830,7 +830,7 @@ def init_logger(fn=None, lvl=logging.DEBUG):
     logger.addHandler(handler)
 
 
-def load_conf():
+def load_args_conf():
 
     parser = argparse.ArgumentParser(description='mysql backup-restore tool')
 
@@ -849,6 +849,9 @@ def load_conf():
     parser.add_argument('--s3-bucket',     action='store', help='s3 bucket name')
     parser.add_argument('--s3-access-key', action='store', help='s3 access key')
     parser.add_argument('--s3-secret-key', action='store', help='s3 secret key')
+
+    parser.add_argument('cmd', type=str, nargs=1, choices=['backup', 'restore', 'catchup_binlog'], help='command to run')
+    parser.add_argument('--when', action='store', choices=['no-data-dir', 'stopped'], help='condition that must be satisfied before a command runs')
 
     args = parser.parse_args()
 
@@ -884,49 +887,59 @@ def load_conf():
 
     logger.info('conf={c}'.format(c=conf))
 
-    return conf
+    return args, conf
 
 
 if __name__ == "__main__":
 
-    init_logger()
+    def main():
 
-    conf = load_conf()
+        init_logger()
+        args, conf = load_args_conf()
 
-    mb = MysqlBackup(conf)
+        mb = MysqlBackup(conf)
 
-    try:
-        if sys.argv[1] == 'backup':
-            mb.backup()
+        # silently quit if condition 'when' is not satisfied
 
-        elif sys.argv[1] == 'restore':
-            mb.restore_from_backup()
+        when = args['when']
 
-        elif sys.argv[1] == 'restore_if_no_data_dir':
-            if os.path.exists(mb.render("{mysql_data_dir}")):
-                pass
+        if when is not None:
+
+            if when == 'no-data-dir':
+                if os.path.exists(mb.render("{mysql_data_dir}")):
+                    return
+
+            elif when == 'stopped':
+                if mb.is_instance_alive():
+                    return
+
             else:
+                raise ValueError('invalid argument "when": {w}'.format(w=when))
+
+        # run command
+
+        cmd = args['cmd']
+
+        try:
+            if cmd == 'backup':
+                mb.backup()
+
+            elif cmd == 'restore':
                 mb.restore_from_backup()
 
-        elif sys.argv[1] == 'catchup_binlog':
-            mb.assert_instance_is_down()
-            mb.apply_remote_binlog()
-
-        elif sys.argv[1] == 'catchup_binlog_if_down':
-            try:
+            elif cmd == 'catchup_binlog':
                 mb.assert_instance_is_down()
-            except MysqlIsAlive as e:
-                pass
-            else:
                 mb.apply_remote_binlog()
 
-        else:
-            raise ValueError('invalid command: ' + sys.argv[1])
+            else:
+                raise ValueError('invalid command: ' + str(cmd))
 
-    except (MysqlBackupError, MysqlRestoreError) as e:
-        print e.__class__.__name__
-        for i in range(4):
-            print e[i]
-        sys.exit(1)
+        except (MysqlBackupError, MysqlRestoreError) as e:
+            print e.__class__.__name__
+            for i in range(4):
+                print e[i]
+            sys.exit(1)
 
-    sys.exit(0)
+        sys.exit(0)
+
+    main()
