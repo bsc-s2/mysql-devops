@@ -857,14 +857,14 @@ def load_args_conf():
 
     if args.conf_path is not None:
 
-        with open(conf_path, 'r') as f:
+        with open(args.conf_path, 'r') as f:
             content = f.read()
 
         conf = yaml.load(content)
         logger.info('load conf from {f}: {c}'.format(f=args.conf_path, c=conf))
 
         if 'conf_base' not in conf:
-            conf['conf_base'] = os.path.dirname(os.path.realpath(conf_path))
+            conf['conf_base'] = os.path.dirname(os.path.realpath(args.conf_path))
             logger.info('add config conf_base={conf_base}'.format(**conf))
 
     conf_keys = ('mysql_base',
