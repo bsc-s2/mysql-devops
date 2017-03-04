@@ -917,7 +917,7 @@ def main():
 
     # run command
 
-    cmd = args['cmd']
+    cmd = args.cmd
 
     try:
         if cmd == 'backup':
