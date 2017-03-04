@@ -900,7 +900,7 @@ def main():
 
     # silently quit if condition 'when' is not satisfied
 
-    when = args['when']
+    when = args.when
 
     if when is not None:
 
