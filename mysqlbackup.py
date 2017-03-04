@@ -890,56 +890,56 @@ def load_args_conf():
     return args, conf
 
 
+def main():
+
+    init_logger()
+    args, conf = load_args_conf()
+
+    mb = MysqlBackup(conf)
+
+    # silently quit if condition 'when' is not satisfied
+
+    when = args['when']
+
+    if when is not None:
+
+        if when == 'no-data-dir':
+            if os.path.exists(mb.render("{mysql_data_dir}")):
+                return
+
+        elif when == 'stopped':
+            if mb.is_instance_alive():
+                return
+
+        else:
+            raise ValueError('invalid argument "when": {w}'.format(w=when))
+
+    # run command
+
+    cmd = args['cmd']
+
+    try:
+        if cmd == 'backup':
+            mb.backup()
+
+        elif cmd == 'restore':
+            mb.restore_from_backup()
+
+        elif cmd == 'catchup_binlog':
+            mb.assert_instance_is_down()
+            mb.apply_remote_binlog()
+
+        else:
+            raise ValueError('invalid command: ' + str(cmd))
+
+    except (MysqlBackupError, MysqlRestoreError) as e:
+        print e.__class__.__name__
+        for i in range(4):
+            print e[i]
+        sys.exit(1)
+
+    sys.exit(0)
+
+
 if __name__ == "__main__":
-
-    def main():
-
-        init_logger()
-        args, conf = load_args_conf()
-
-        mb = MysqlBackup(conf)
-
-        # silently quit if condition 'when' is not satisfied
-
-        when = args['when']
-
-        if when is not None:
-
-            if when == 'no-data-dir':
-                if os.path.exists(mb.render("{mysql_data_dir}")):
-                    return
-
-            elif when == 'stopped':
-                if mb.is_instance_alive():
-                    return
-
-            else:
-                raise ValueError('invalid argument "when": {w}'.format(w=when))
-
-        # run command
-
-        cmd = args['cmd']
-
-        try:
-            if cmd == 'backup':
-                mb.backup()
-
-            elif cmd == 'restore':
-                mb.restore_from_backup()
-
-            elif cmd == 'catchup_binlog':
-                mb.assert_instance_is_down()
-                mb.apply_remote_binlog()
-
-            else:
-                raise ValueError('invalid command: ' + str(cmd))
-
-        except (MysqlBackupError, MysqlRestoreError) as e:
-            print e.__class__.__name__
-            for i in range(4):
-                print e[i]
-            sys.exit(1)
-
-        sys.exit(0)
-
     main()
