@@ -18,6 +18,8 @@ import signal
 import subprocess
 import sys
 import time
+import argparse
+import yaml
 
 import boto3
 import MySQLdb
@@ -827,20 +829,71 @@ def init_logger(fn=None, lvl=logging.DEBUG):
     logger.handlers = []
     logger.addHandler(handler)
 
-if __name__ == "__main__":
 
-    init_logger()
+def load_conf():
 
-    def make_mb(conf_path):
+    parser = argparse.ArgumentParser(description='mysql backup-restore tool')
+
+    parser.add_argument('--conf-path', action='store', help='path to config file in yaml')
+
+    # command line arguments override config file.
+
+    parser.add_argument('--mysql-base',    action='store', help='base dir of mysql executable')
+    parser.add_argument('--host',          action='store', help='name of this host, just as identity of backup file name')
+    parser.add_argument('--data-base',     action='store', help='base dir of mysql data, like /data1')
+    parser.add_argument('--backup-base',   action='store', help='base dir of backup tmp files, like /data1/backup')
+    parser.add_argument('--port',          action='store', help='serving port of the mysql instance to backup/restore')
+    parser.add_argument('--instance-id',   action='store', help='id in number, as part of backup file name, it should be unique in a replication group')
+    parser.add_argument('--date-str',      action='store', help='date in form 2017_01_01. It is used in backup file name, or to specify which backup to use for restore. when absent, use date of today')
+    parser.add_argument('--s3-host',       action='store', help='s3 compatible service hostname to store backup')
+    parser.add_argument('--s3-bucket',     action='store', help='s3 bucket name')
+    parser.add_argument('--s3-access-key', action='store', help='s3 access key')
+    parser.add_argument('--s3-secret-key', action='store', help='s3 secret key')
+
+    args = parser.parse_args()
+
+    if args.conf_path is not None:
 
         with open(conf_path, 'r') as f:
             content = f.read()
 
-        conf = json.loads(content)
-        mb = MysqlBackup(conf)
-        return mb
+        conf = yaml.load(content)
+        logger.info('load conf from {f}: {c}'.format(f=args.conf_path, c=conf))
 
-    mb = make_mb(sys.argv[2])
+        if 'conf_base' not in conf:
+            conf['conf_base'] = os.path.dirname(os.path.realpath(conf_path))
+            logger.info('add config conf_base={conf_base}'.format(**conf))
+
+    conf_keys = ('mysql_base',
+                 'host',
+                 'data_base',
+                 'backup_base',
+                 'port',
+                 'instance_id',
+                 'date_str',
+                 's3_host',
+                 's3_bucket',
+                 's3_access_key',
+                 's3_secret_key',
+    )
+
+    for k in conf_keys:
+        if args[k] is not None:
+            conf[k] = args[k]
+            logger.info('add config from command line: {k}={v}'.format(k=k, v=args[k]))
+
+    logger.info('conf={c}'.format(c=conf))
+
+    return conf
+
+
+if __name__ == "__main__":
+
+    init_logger()
+
+    conf = load_conf()
+
+    mb = MysqlBackup(conf)
 
     try:
         if sys.argv[1] == 'backup':
