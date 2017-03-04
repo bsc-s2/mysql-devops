@@ -379,7 +379,7 @@ class MysqlBackup(object):
 
         proc = self.start_tmp_mysql(['--server-id={tmp_server_id}'])
 
-        rst = self.mysql_query('start slave')
+        self.mysql_query('start slave')
 
         # wait for binlog-sync to start
         time.sleep(1)
