@@ -866,6 +866,9 @@ def load_args_conf():
         if 'conf_base' not in conf:
             conf['conf_base'] = os.path.dirname(os.path.realpath(args.conf_path))
             logger.info('add config conf_base={conf_base}'.format(**conf))
+    else:
+        conf = {}
+
 
     conf_keys = ('mysql_base',
                  'host',
@@ -895,6 +898,9 @@ def main():
 
     init_logger()
     args, conf = load_args_conf()
+
+    logger.info('cmd={cmd}'.foramt(cmd=cmd))
+    logger.info('conf={conf}'.format(conf=conf))
 
     mb = MysqlBackup(conf)
 
