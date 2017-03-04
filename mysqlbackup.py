@@ -899,7 +899,7 @@ def main():
     init_logger()
     args, conf = load_args_conf()
 
-    logger.info('cmd={cmd}'.foramt(cmd=cmd))
+    logger.info('cmd={cmd}'.format(cmd=cmd))
     logger.info('conf={conf}'.format(conf=conf))
 
     mb = MysqlBackup(conf)
