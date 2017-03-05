@@ -241,6 +241,11 @@ class MysqlBackup(object):
 
         self.chown('{mysql_data_dir}')
 
+        if self.bkp_conf['clean_after_restore']:
+            self.shell_run('remove backup dir and files',
+                           'rm -rf {backup_data_dir} {backup_binlog_dir} {backup_tgz_des3}')
+
+
     def assert_instance_is_down(self):
 
         try:
@@ -331,8 +336,21 @@ class MysqlBackup(object):
 
         self.chown('{mysql_data_dir}')
 
+        # A lot binlog will be skipped because there could already be in data.
+        # Thus there would be a long time no event is sent to mysql, in which
+        # case, mysql closes client connect that causes a failure.
+        #
+        # Thus we need a very long timeout.
+        #
+        # But I am still not very sure which timeout causes this failure.
+        # In several tests I had random failure with each paarameter set.
+
         self.info("start mysqld to apply only-in-binlog events ...")
-        proc = self.start_tmp_mysql()
+        proc = self.start_tmp_mysql([
+            '--net_read_timeout=36000',
+            '--wait_timeout=36000',
+            '--interactive_timeout=36000',
+        ])
 
         binlog_fns = os.listdir(self.render('{backup_binlog_dir}'))
         binlog_fns = [x for x in binlog_fns
@@ -519,15 +537,16 @@ class MysqlBackup(object):
             # instance.
             ('tmp_server_id',        "{instance_id}00{port}"),
 
+            ('backup_tgz_des3_tail',               "mysql-{port}.tgz.des3"),
             ('backup_data_tail',                   "mysql-{port}-backup"),
             ('backup_data_dir',      "{backup_base}/mysql-{port}-backup"),
             ('backup_my_cnf',        "{backup_base}/mysql-{port}-backup/my.cnf"),
-            ('backup_tgz_des3',      "{backup_base}/mysql-{port}.tgz.des3"),
+            ('backup_tgz_des3',     "{backup_base}/{backup_tgz_des3_tail}"),
 
             ('backup_binlog_tail',                 "mysql-{port}-binlog"),
             ('backup_binlog_dir',    "{backup_base}/mysql-{port}-binlog"),
 
-            ('s3_key',               "mysql-backup-daily/{port}/{date_str}/mysql-{port}.tgz"),
+            ('s3_key',               "mysql-backup-daily/{port}/{date_str}/{backup_tgz_des3_tail}"),
             ('mes',                  "{host}:{port} [{instance_id}] {mysql_data_dir}"),
         ]
 
@@ -850,6 +869,8 @@ def load_args_conf():
     parser.add_argument('--s3-access-key', action='store', help='s3 access key')
     parser.add_argument('--s3-secret-key', action='store', help='s3 secret key')
 
+    parser.add_argument('--clean-after-restore', action='store_true', help='clean backup files after restore')
+
     parser.add_argument('cmd', type=str, nargs=1, choices=['backup', 'restore', 'catchup_binlog'], help='command to run')
     parser.add_argument('--when', action='store', choices=['no-data-dir', 'stopped'], help='condition that must be satisfied before a command runs')
 
@@ -881,6 +902,8 @@ def load_args_conf():
                  's3_bucket',
                  's3_access_key',
                  's3_secret_key',
+
+                 'clean_after_restore',
     )
 
     for k in conf_keys:
@@ -889,6 +912,7 @@ def load_args_conf():
             conf[k] = v
             logger.info('add config from command line: {k}={v}'.format(k=k, v=v))
 
+    logger.info('args={a}'.format(a=args))
     logger.info('conf={c}'.format(c=conf))
 
     return args, conf
@@ -923,7 +947,7 @@ def main():
 
     # run command
 
-    cmd = args.cmd
+    cmd = (args.cmd + [''])[0]
 
     try:
         if cmd == 'backup':
