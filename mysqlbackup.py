@@ -849,7 +849,7 @@ def init_logger(fn=None, lvl=logging.DEBUG):
     logger.addHandler(handler)
 
 
-def load_args_conf():
+def load_cli_args():
 
     parser = argparse.ArgumentParser(description='mysql backup-restore tool')
 
@@ -875,21 +875,33 @@ def load_args_conf():
     parser.add_argument('--when', action='store', choices=['no-data-dir', 'stopped'], help='condition that must be satisfied before a command runs')
 
     args = parser.parse_args()
+    logger.info('args={a}'.format(a=args))
 
-    if args.conf_path is not None:
+    return args
 
-        with open(args.conf_path, 'r') as f:
+
+def load_conf_from_file(conf_path):
+
+    if conf_path is not None:
+
+        with open(conf_path, 'r') as f:
             content = f.read()
 
         conf = yaml.load(content)
-        logger.info('load conf from {f}: {c}'.format(f=args.conf_path, c=conf))
+        logger.info('load conf from {f}: {c}'.format(f=conf_path, c=conf))
 
         if 'conf_base' not in conf:
-            conf['conf_base'] = os.path.dirname(os.path.realpath(args.conf_path))
+            conf['conf_base'] = os.path.dirname(os.path.realpath(conf_path))
             logger.info('add config conf_base={conf_base}'.format(**conf))
     else:
         conf = {}
 
+    return conf
+
+
+def load_conf(args):
+
+    conf = load_conf_from_file(args.conf_path)
 
     conf_keys = ('mysql_base',
                  'host',
@@ -912,16 +924,17 @@ def load_args_conf():
             conf[k] = v
             logger.info('add config from command line: {k}={v}'.format(k=k, v=v))
 
-    logger.info('args={a}'.format(a=args))
     logger.info('conf={c}'.format(c=conf))
 
-    return args, conf
+    return conf
 
 
 def main():
 
     init_logger()
-    args, conf = load_args_conf()
+
+    args = load_cli_args()
+    conf = load_conf(args)
 
     mb = MysqlBackup(conf)
 
@@ -965,8 +978,6 @@ def main():
         for i in range(4):
             print e[i]
         sys.exit(1)
-
-    sys.exit(0)
 
 
 if __name__ == "__main__":
