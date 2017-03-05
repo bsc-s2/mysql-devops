@@ -882,6 +882,8 @@ def load_cli_args():
 
 def load_conf_from_file(conf_path):
 
+    logger.info('loading backup conf from {p}'.format(p=conf_path))
+
     if conf_path is not None:
 
         with open(conf_path, 'r') as f:
