@@ -923,9 +923,6 @@ def main():
     init_logger()
     args, conf = load_args_conf()
 
-    logger.info('cmd={cmd}'.format(cmd=repr(cmd)))
-    logger.info('conf={conf}'.format(conf=repr(conf)))
-
     mb = MysqlBackup(conf)
 
     # silently quit if condition 'when' is not satisfied
