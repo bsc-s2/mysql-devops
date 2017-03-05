@@ -24,10 +24,13 @@ if __name__ == "__main__":
 
     for port in ports:
 
-        conf_path = '/s2/mysql/backup_conf/{port}/backup_conf.yaml'.format(port=port)
-        conf = mysqlbackup.load_conf_from_file(conf_path)
+        try:
+            conf_path = '/s2/mysql/backup_conf/{port}/backup_conf.yaml'.format(port=port)
+            conf = mysqlbackup.load_conf_from_file(conf_path)
 
-        conf['clean_after_restore'] = True
+            conf['clean_after_restore'] = True
 
-        mb = mysqlbackup.MysqlBackup(conf)
-        mb.backup()
+            mb = mysqlbackup.MysqlBackup(conf)
+            mb.backup()
+        except mysqlbackup.MysqlBackupError as e:
+            logger.exception(repr(e))
