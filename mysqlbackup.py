@@ -623,6 +623,7 @@ class MysqlBackup(object):
     def shell_run(self, mes, cmd, cwd=None, **kwarg):
 
         self.info_r(mes + ' ...', **kwarg)
+        self.info_r('cwd={cwd}')
 
         cmd = self.render(cmd, **kwarg)
 
