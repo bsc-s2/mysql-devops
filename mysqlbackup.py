@@ -100,12 +100,15 @@ class MysqlBackup(object):
 
         self.info("backup ...")
 
+        self.shell_run('remove old backup {backup_data_dir} {backup_binlog_dir} {backup_tgz_des3}',
+                       'rm -rf {backup_data_dir} {backup_binlog_dir} {backup_tgz_des3}')
+
         self.backup_data()
         self.backup_binlog()
         self.calc_checksum()
         self.upload_backup()
-        self.shell_run('remove backup dir',
-                       'rm -rf {backup_data_dir} {backup_binlog_dir}')
+        self.shell_run('remove backup {backup_data_dir} {backup_binlog_dir} {backup_tgz_des3}',
+                       'rm -rf {backup_data_dir} {backup_binlog_dir} {backup_tgz_des3}')
 
         self.info("backup OK")
 
