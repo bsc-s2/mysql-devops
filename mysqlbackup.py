@@ -549,7 +549,7 @@ class MysqlBackup(object):
             ('backup_binlog_tail',                 "mysql-{port}-binlog"),
             ('backup_binlog_dir',    "{backup_base}/mysql-{port}-binlog"),
 
-            ('s3_key',               "mysql-backup-daily/{port}/{date_str}/{backup_tgz_des3_tail}"),
+            ('s3_key',               "{date_str}/{port}/{backup_tgz_des3_tail}"),
             ('mes',                  "{host}:{port} [{instance_id}] {mysql_data_dir}"),
         ]
 
