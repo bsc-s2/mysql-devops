@@ -768,7 +768,7 @@ def boto_put(cli, fpath, bucket_name, key_name, extra_args):
     GB = 1024**3
 
     config = TransferConfig(multipart_threshold=1 * GB,
-                            multipart_chunksize=32 * MB, )
+                            multipart_chunksize=256 * MB, )
 
     cli.upload_file(
         Filename=fpath,
