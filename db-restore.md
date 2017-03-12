@@ -1,6 +1,7 @@
 # Add Mysql Slave to a Group(port)
 
 -   add ssh key to coding.net
+
     ```
     ssh-keygen
     cat ~/.ssh/id_ras.pub

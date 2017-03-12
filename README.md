@@ -3,11 +3,75 @@
 `mysqlbackup.py` is a wrapper of `xtrabackup`.
 It provides with a full backup/restore mechanism for both data and binlog.
 
+## Usage
+
+Basic usage:
+
+```
+mysqlbackup.py --conf-path <conf.yaml> {backup|restore|catchup_binlog}
+```
+
+`conf.yaml` is a yaml decribes where the data is and where the backup is
+
+```yaml
+# required:
+mysql_base: /usr/local/mysql-5.7.13
+
+# required, the host name or ip, used only for naming the backup tgz file.
+host: 127.0.0.1
+
+# required, base dir of running mysql instance data-dir
+data_base:   /data1
+
+# required, base dir of backup dir.
+backup_base: /data1/backup
+
+# required, port of the mysql instance to be backed up.
+port: 3309
+
+# required, the instance id in our mysql replication group.
+instance_id: 1
+
+# optional, for data completeness test only
+sql_test_insert: 'insert into `xp2`.`heartbeat`'
+                    ' (`key`, `value`, `ts`)'
+                    ' values'
+                    ' ("test-backup", "{v}", "{v}")'
+sql_test_get_2: 'select `value` from `xp2`.`heartbeat` order by `_id` desc limit 2'
+
+# optional, for backup to s3 storage.
+s3_host       : "s3.amazonaws.com"
+s3_bucket     : "mysql-backup"
+s3_access_key : "143728432789"
+s3_secret_key : "jfkdslfjdsklfjdsklfdjkls"
+```
+
+Additional command line arguments are also supported to override options in
+`conf.yaml`:
+
+-   `--mysql-base`          base dir of mysql executable
+-   `--host`                name of this host, just as identity of backup file name
+-   `--data-base`           base dir of mysql data, like /data1
+-   `--backup-base`         base dir of backup tmp files, like /data1/backup
+-   `--port`                serving port of the mysql instance to backup/restore
+-   `--instance-id`         id in number, as part of backup file name, it should be unique in a replication group
+-   `--date-str`            date in form 2017_01_01. It is used in backup file name, or to specify which backup to use for restore. when absent, use date of today
+-   `--s3-host`             s3 compatible service hostname to store backup
+-   `--s3-bucket`           s3 bucket name
+-   `--s3-access-key`       s3 access key
+-   `--s3-secret-key`       s3 secret key
+-   `--clean-after-restore` clean backup files after restore
+-   `--when`                no-data-dir|stopped, help='condition that must be satisfied before a command runs
+
+
 ##  Workflow
 
 ### Backup
 
-To backup, it does following things:
+**syntax**:
+`mysqlbackup.py backup --conf-path conf.yaml [<other argument>]`
+
+To backup, `mysqlbackup.py` does following things:
 
 -   Backup data from an active mysql instance.
 
@@ -18,38 +82,70 @@ To backup, it does following things:
 -   Backup binlog from an active mysql instance.
     Binlog may contains more events than it is in the data backup.
 
--   Pack backup dir into a `tar.gz` package.
+-   Pack backup dir into a `tgz.des3` package with des3 encryption.
 
--   Calculate checksum of the `tar.gz`.
+-   Calculate checksum of the `tgz.des3`.
 
 -   Upload it to a aws-s3 compatible storage service, if s3 account is
     provided in conf.
 
--   Removes backup dir but leaves `tar.gz` where it is.
+-   Removes temporary backup dir and file.
 
 ### Restore
 
-To restore, it does following things:
+Normally restore is done in three main steps:
 
--   Download backup `tar.gz` from aws-s3 compatible storage service,
+-   Rebuild data dir.
+-   Setup replication, since the backup that is made from other instance may
+    have different replication setup.
+-   Catchup binlog those are not in backup from other instances.
+
+`mysqlbackup.py` can do the first and third part.
+But setting up replication is related to upper level business logic.
+
+**syntax**:
+`mysqlbackup.py restore --conf-path conf.yaml [<other argument>]`
+
+An useful argument is `--clean-after-srestore`.
+It informs `mysqlbackup.py` to remove backup data if restore succeeds.
+
+To restore, `mysqlbackup.py` does following things:
+
+-   Download backup `tgz.des3` from aws-s3 compatible storage service,
     if s3 account is provided.
 
 -   Check file checksum(sha1 is prefered) against the checksum recorded in
     meta of object in aws s3.
 
--   Unpack `tar.gz`.
+-   Unpack `tgz.des3`.
 
 -   Copies data back to where specified by the `my.cnf` from the backup.
 
 -   Starts mysql instance in **read-only** mode and applies binlog
     events from backup to this instance.
 
--   Restarts mysql with a **temporary** `server-id`, and starts binlog
+-   Shuts it down.
+
+### Catchup binlog
+
+**syntax**:
+`mysqlbackup.py catchup_binlog --conf-path conf.yaml [<other argument>]`
+
+-   Starts mysql with a **temporary** `server-id`, and starts binlog
     replication to let it receive binlog events those created by itself but
-    not in backup, from other instances.
+    not in backup, from other instances in a port group.
 
 -   Shuts it down and leave it there as a **ready-to-use** mysql data
     directory.
+
+### Other arguments
+
+-   `--when no-data-dir`: executes(backup/restore/catchup_binlog) only when there is no
+    data dir for the specified port.
+    If condition is not satisfied, exit normally.
+
+-   `--when stopped`: executes only when instance is stopped.
+    If condition is not satisfied, exit normally.
 
 ## How it works
 
@@ -57,27 +153,30 @@ To restore, it does following things:
 instance.
 But `innobackupex` does not backup/restore binlog.
 Thus we need to backup/restore binlog manually and keep binlog and data
-consistent.
+**consistent**.
 
-Since the backup may be run on an active mysql instance, after data was
-backed up, there could be more events in binlog than there are in backup data.
+We backup data first, then binlog.
 
-Thus every time restoring, we need to apply binlog events those are in binlog
-backup but not in data backup to the restored mysql instance.
+Since very likely, the backup procedure may be run on an active mysql
+instance, there are continuous write operations on this instance.
+After data was backed up, there could be more events in binlog than
+there are in backup data.
+
+Thus every time to restore an instance, we need to apply binlog events those
+are in binlog backup but not in data backup, to the restored mysql instance.
 
 It also backup `my.cnf` but it does not backup `auto.cnf`(the file in which
-the uuid of the mysql instance is defined).
+the uuid of the mysql instance is stored).
 
-<!-- TODO third party -->
+The restore part:
 
-Then a third party script is responsible to setup new replication after backup
-restored.
-Since replication topology might change after backup is made.
-
+After restoring data, and before apply binlog from remote,
+a third party script is responsible to setup new replication.
+Because replication topology might change after backup is made.
 
 With new replication setup, start mysql instance with temporary **server-id**
 and catchup binlog from all reachable source, until this instance is less than
-1 second behind source instance.
+1 second behind any source instance.
 
 Then shut down mysql and leave it as a ready-to-use instance.
 
@@ -129,7 +228,7 @@ and start mysql with a temporary `server-id`.
 This way the new instance will accept all binlog event(created by itself or
 other instances) those it does not have.
 
-**We can not use `--replicate-same-server-id` to force mysql to apply binlog
+**We can NOT use `--replicate-same-server-id` to force mysql to apply binlog
 either.**
 
 Because `--replicate-same-server-id` can not be used together with
@@ -149,33 +248,38 @@ There are two instance `instace 1` and `instance 2`.
 `instance 2` is a remote replication with the same data in it.
 
 ```
-instance 1                            instance 2
-uuid = aaa:                           uuid = ccc:
+Initial:  instance 1                            instance 2
+          uuid = aaa:                           uuid = ccc:
 
-backup data and binlog,               active instance with
-without latest gtid:5                 latest gtid:5
-bkp:    data:     aaa:1-3             ccc:    data:     aaa:1-5
-        binlog:   aaa:1-4                     binlog:   aaa:1-5
+Make backup from 1, without latest binlog gtid:5 included in either data or
+binlog.
+Active instance 2 has latest gtid:5
 
-restored with new uuid = bbb:
-bbb:    data:     aaa:1-3
+          bkp:    data:     aaa:1-3             ccc:    data:     aaa:1-5
+                  binlog:   aaa:1-4                     binlog:   aaa:1-5
 
-apply rows in binlog but not in
-backup-data:
-bbb:    data:     aaa:1-4
+Restored from backup, with new created uuid = bbb:
 
-copy back binlog, now it is
-consistent but behind ccc:
-bbb:    data:     aaa:1-4
-        binlog:   aaa:1-4
+          bbb:    data:     aaa:1-3
 
-apply binlog from ccc:
-bbb:    data:     aaa:1-5          <- ccc:    data:     aaa:1-5, bbb:1-1
-        binlog:   aaa:1-5                     binlog:   aaa:1-5, bbb:1-1
+Apply events in binlog but not in backup-data:
 
-new write:                            sync from bbb:
-bbb:    data:     aaa:1-5, bbb:1-1 -> ccc:    data:     aaa:1-5, bbb:1-1
-        binlog:   aaa:1-5, bbb:1-1            binlog:   aaa:1-5, bbb:1-1
+          bbb:    data:     aaa:1-4
+
+Copy back binlog, now data and binlog are consistent but behind ccc:
+
+          bbb:    data:     aaa:1-4
+                  binlog:   aaa:1-4
+
+Setup replication and apply binlog gtid:5 from ccc:
+
+          bbb:    data:     aaa:1-5          <- ccc:    data:     aaa:1-5
+                  binlog:   aaa:1-5                     binlog:   aaa:1-5
+
+If there is new write on bbb, it should be replicated to ccc too:
+
+          bbb:    data:     aaa:1-5, bbb:1-1 -> ccc:    data:     aaa:1-5, bbb:1-1
+                  binlog:   aaa:1-5, bbb:1-1            binlog:   aaa:1-5, bbb:1-1
 
 ```
 
@@ -196,54 +300,6 @@ bbb:    data:     aaa:1-5, bbb:1-1 -> ccc:    data:     aaa:1-5, bbb:1-1
     ```
     pip install MySQLdb
     pip install boto3
+    pip install yaml
+    pip install argparse
     ```
-
-## Usage
-
-`mysqlbackup.py` provides with a sample usage snippet in its main block at the
-bottom:
-
-```python
-conf = {
-    # required:
-    'mysql_base': '/usr/local/mysql-5.7.13',
-
-    # required, the host name or ip, used only for naming the backup tgz file.
-    'host': '127.0.0.1',
-
-    # required, base dir of running mysql instance data-dir
-    'data_base':   '/data1',
-
-    # required, base dir of backup dir.
-    'backup_base': '/data1/backup',
-
-    # required, port of the mysql instance to be backed up.
-    'port': 3309,
-
-    # required, the instance id in our mysql replication group.
-    'instance_id': '1',
-
-    # optional, for data completeness test only
-    'sql_test_insert': ('insert into `xp2`.`heartbeat`'
-                        ' (`key`, `value`, `ts`)'
-                        ' values'
-                        ' ("test-backup", "{v}", "{v}")'),
-    'sql_test_get_2': 'select `value` from `xp2`.`heartbeat` order by `_id` desc limit 2',
-
-    # optional, for backup to s3 storage.
-    's3_host':          's2.i.qingcdn.com',
-    's3_bucket':        'mysql-backup',
-    's3_access_key':    's2kjq4d8ml56brfnxagz',
-    's3_secret_key':    'UmF2/KNAsZbPB4RnCEUE47vFsui5zG3RxhXdWxtV',
-}
-
-mb = MysqlBackup(conf)
-
-# creates tgz {backup_base}/mysql-{port}.tgz
-# and store backup tgz to s3 if s3_bucket is provided.
-mb.backup()
-
-# restore mysql {backup_base}/mysql-{port}.tgz
-# or restore from s3 if s3_bucket is provided.
-mb.restore()
-```
