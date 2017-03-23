@@ -1,10 +1,10 @@
 #!/usr/bin/env python2
 # coding: utf-8
 
-import logging
-import mysqlbackup
-
 import argparse
+import logging
+
+import mysqlbackup
 
 logger = logging.getLogger(__name__)
 

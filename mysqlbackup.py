@@ -7,6 +7,7 @@ required:
     xtrabackup version > 2.4 (for MySQL 5.7)
 '''
 
+import argparse
 import copy
 import errno
 import hashlib
@@ -18,11 +19,10 @@ import signal
 import subprocess
 import sys
 import time
-import argparse
-import yaml
 
 import boto3
 import MySQLdb
+import yaml
 from boto3.s3.transfer import TransferConfig
 from botocore.client import Config
 

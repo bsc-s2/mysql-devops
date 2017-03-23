@@ -1,9 +1,37 @@
-# mysqlbackup.py
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+#   Table of Content
+
+- [Name](#name)
+- [Status](#status)
+- [Description](#description)
+- [Usage](#usage)
+  - [Backup](#backup)
+  - [Restore](#restore)
+  - [Catchup binlog](#catchup-binlog)
+  - [Other arguments](#other-arguments)
+- [How it works](#how-it-works)
+  - [Dependency](#dependency)
+- [Author](#author)
+- [Copyright and License](#copyright-and-license)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+
+#   Name
+
+mysql-devops
+
+#   Status
+
+This library is considered production ready.
+
+#   Description
 
 `mysqlbackup.py` is a wrapper of `xtrabackup`.
 It provides with a full backup/restore mechanism for both data and binlog.
 
-## Usage
+#   Usage
 
 Basic usage:
 
@@ -64,9 +92,7 @@ Additional command line arguments are also supported to override options in
 -   `--when`                no-data-dir|stopped, help='condition that must be satisfied before a command runs
 
 
-##  Workflow
-
-### Backup
+## Backup
 
 **syntax**:
 `mysqlbackup.py backup --conf-path conf.yaml [<other argument>]`
@@ -91,7 +117,7 @@ To backup, `mysqlbackup.py` does following things:
 
 -   Removes temporary backup dir and file.
 
-### Restore
+## Restore
 
 Normally restore is done in three main steps:
 
@@ -106,54 +132,63 @@ But setting up replication is related to upper level business logic.
 **syntax**:
 `mysqlbackup.py restore --conf-path conf.yaml [<other argument>]`
 
-An useful argument is `--clean-after-srestore`.
+A useful argument is `--clean-after-srestore`.
 It informs `mysqlbackup.py` to remove backup data if restore succeeds.
 
 To restore, `mysqlbackup.py` does following things:
 
--   Download backup `tgz.des3` from aws-s3 compatible storage service,
-    if s3 account is provided.
+-   Downloads backup `<backup_fn>.tgz.des3` from aws-s3 compatible storage
+    service, if s3 account is provided.
 
--   Check file checksum(sha1 is prefered) against the checksum recorded in
+-   Checks file checksum(sha1 is prefered) against the checksum recorded in
     meta of object in aws s3.
 
--   Unpack `tgz.des3`.
+-   Unpacks `<backup_fn>tgz.des3`.
 
--   Copies data back to where specified by the `my.cnf` from the backup.
+-   Copies data back to the dir specified by the `my.cnf` in the backup.
 
 -   Starts mysql instance in **read-only** mode and applies binlog
     events from backup to this instance.
 
 -   Shuts it down.
 
-### Catchup binlog
+## Catchup binlog
 
 **syntax**:
 `mysqlbackup.py catchup_binlog --conf-path conf.yaml [<other argument>]`
 
 -   Starts mysql with a **temporary** `server-id`, and starts binlog
-    replication to let it receive binlog events those created by itself but
-    not in backup, from other instances in a port group.
+    replication to let it receive and apply binlog events those are created by
+    itself after backup was made, from other instances in a port group.
 
 -   Shuts it down and leave it there as a **ready-to-use** mysql data
     directory.
 
-### Other arguments
+## Other arguments
 
--   `--when no-data-dir`: executes(backup/restore/catchup_binlog) only when there is no
-    data dir for the specified port.
+-   `--when no-data-dir`: executes(backup/restore/catchup_binlog) only when
+    there is no data dir for the specified port.
+
     If condition is not satisfied, exit normally.
 
 -   `--when stopped`: executes only when instance is stopped.
+
     If condition is not satisfied, exit normally.
 
-## How it works
+#  How it works
 
 `innobackupex` is a great tool for backing up data from an active mysql
 instance.
 But `innobackupex` does not backup/restore binlog.
 Thus we need to backup/restore binlog manually and keep binlog and data
 **consistent**.
+
+> We can NOT restore binlog from remote instance:
+>
+> - There is no easy way to cut binlog at where local data ends.
+>
+> - We can not apply binlog to local, if an event has already been in local
+>   data, mysql does not produce a binlog.
 
 We backup data first, then binlog.
 
@@ -184,10 +219,10 @@ Then shut down mysql and leave it as a ready-to-use instance.
 <!-- TODO continue from here -->
 
 After restoring data and binlog, we also need to setup binlog replication to
-sync binlog events from other mysql instances those are in a same port group,
-to recovery events those are written after this backup created.
+sync binlog events from other mysql instances in a same port group,
+to recovery events those are written after this backup was made.
 
-This step is done by:
+Setting up replication is done in following steps:
 
 -   resets relay log files and index, since relay logs are not backed up.
 
@@ -238,22 +273,21 @@ binlog from several instances.
 
 After syncing enough binlog, stop this temporary mysql instance.
 
-For the next time it starts, with the original `server-id` it will work as
-normal.
+For the next time it starts, with the original `server-id`, just like
+normally.
 
-A diagram illustrates how backup and restore works as follow.
+The following diagram illustrates how backup and restore works.
 There are two instance `instace 1` and `instance 2`.
 
-`instance 1` is the one that is backed up.
+`instance 1` is backed up.
 `instance 2` is a remote replication with the same data in it.
 
 ```
 Initial:  instance 1                            instance 2
           uuid = aaa:                           uuid = ccc:
 
-Make backup from 1, without latest binlog gtid:5 included in either data or
-binlog.
-Active instance 2 has latest gtid:5
+Make backup from 1, without latest binlog gtid:5 in either data or binlog.
+Instance 2 has the latest gtid:5
 
           bkp:    data:     aaa:1-3             ccc:    data:     aaa:1-5
                   binlog:   aaa:1-4                     binlog:   aaa:1-5
@@ -283,7 +317,7 @@ If there is new write on bbb, it should be replicated to ccc too:
 
 ```
 
-## Dependency
+#   Dependency
 
 -   xtrabackup, `2.4` or newer.
 
@@ -303,3 +337,13 @@ If there is new write on bbb, it should be replicated to ccc too:
     pip install yaml
     pip install argparse
     ```
+
+#   Author
+
+Zhang Yanpo (张炎泼) <drdr.xp@gmail.com>
+
+#   Copyright and License
+
+The MIT License (MIT)
+
+Copyright (c) 2015 Zhang Yanpo (张炎泼) <drdr.xp@gmail.com>
