@@ -6,11 +6,14 @@
 - [Status](#status)
 - [Synopsis](#synopsis)
 - [Methods](#methods)
+  - [dictutil.attrdict](#dictutilattrdict)
   - [dictutil.depth_iter](#dictutildepth_iter)
   - [dictutil.breadth_iter](#dictutilbreadth_iter)
+  - [dictutil.get](#dictutilget)
   - [dictutil.make_getter](#dictutilmake_getter)
   - [dictutil.make_setter](#dictutilmake_setter)
     - [Synopsis](#synopsis-1)
+  - [dictutil.contians](#dictutilcontains)
 - [Author](#author)
 - [Copyright and License](#copyright-and-license)
 
@@ -107,6 +110,71 @@ for record in records:
 
 #   Methods
 
+## dictutil.attrdict
+
+**syntax**:
+`dictutil.attrdict()`
+
+**syntax**:
+`dictutil.attrdict(mapping, **kwargs)`:<br/>
+new dictionary initialized from a mapping object's (key, value) pairs, with additional name=value pairs.
+
+**syntax**:
+`dictutil.attrdict(iterable, **kwargs)`:<br/>
+new dictionary initialized as if via: `d = {}; for k, v in iterable: d[k] = v`
+
+Make a dict-like object whose keys can also be accessed with attribute.
+
+Argument is exactly the same as `dict()`.
+
+```
+a = dictutil.attrdict(x=3, y={'z':4})
+a['x']  # 3
+a.x     # 3
+a.y     # {'z':4}
+a.y.z   # 4
+```
+
+This funciton also works well with circular references.
+
+```
+x = {}
+x['x'] = x
+ad = dictutil.attrdict(x)
+
+print(ad.x is ad) # True: circular references are kept
+```
+
+Pros:
+
+- It actually works!
+- No dictionary class methods are shadowed (e.g. .keys() work just fine)
+- Attributes and items are always in sync
+- Trying to access non-existent key as an attribute correctly raises AttributeError instead of KeyError
+
+Cons:
+
+- Methods like .keys() will not work just fine if they get overwritten by incoming data
+- Causes a memory leak in `Python < 2.7.4 / Python3 < 3.2.3`
+- Pylint goes bananas with E1123(unexpected-keyword-arg) and E1103(maybe-no-member)
+- For the uninitiated it seems like pure magic.
+
+Issues:
+
+- Dictionary key overrides dictionary methods:
+
+  ```
+  d = AttrDict()
+  d.update({'items':["a", "b"]})
+  d.items() # TypeError: 'list' object is not callable
+  ```
+
+**arguments**:
+are same as `dict()`, a dictionary or kwargs are both acceptable.
+
+**return**:
+an object provides with dictionary item access with attribute.
+
 ## dictutil.depth_iter
 
 **syntax**:
@@ -130,7 +198,7 @@ for record in records:
     #     (['mykey1', 'mykey2', 'k1', 'k12', 'k121'], 'v-a.b.a')
     #     (['mykey1', 'mykey2', 'k1', 'k11'], 'v-a.a')
 
-   ```
+    ```
 
 -   `maxdepth`:
     specifies the max depth of iteration.
@@ -150,26 +218,26 @@ for record in records:
     points to a non-leaf descendent.
     By default it is `False`.
 
-   ```python
+    ```python
     mydict = {'a':
                  {'a.a': 'v-a.a',
                   'a.b': {'a.b.a': 'v-a.b.a'},
                   'a.c': {'a.c.a': {'a.c.a.a': 'v-a.c.a.a'}}
                  }
              }
-   for keys, vals in dictutil.depth_iter(mydict, intermediate=True):
+    for keys, vals in dictutil.depth_iter(mydict, intermediate=True):
        print keys
 
-   # output:
-   #     ['a']                              # intermediate
-   #     ['a', 'a.a']
-   #     ['a', 'a.b']                       # intermediate
-   #     ['a', 'a.b', 'a.b.a']
-   #     ['a', 'a.c']                       # intermediate
-   #     ['a', 'a.c', 'a.c.a']              # intermediate
-   #     ['a', 'a.c', 'a.c.a', 'a.c.a.a']
+    # output:
+    #     ['a']                              # intermediate
+    #     ['a', 'a.a']
+    #     ['a', 'a.b']                       # intermediate
+    #     ['a', 'a.b', 'a.b.a']
+    #     ['a', 'a.c']                       # intermediate
+    #     ['a', 'a.c', 'a.c.a']              # intermediate
+    #     ['a', 'a.c', 'a.c.a', 'a.c.a.a']
 
-   ```
+    ```
 
 **return**:
 an iterator. Each element it yields is a tuple of keys and value.
@@ -186,6 +254,54 @@ an iterator. Each element it yields is a tuple of keys and value.
 
 **return**:
 an iterator, each element it yields is a tuple that contains keys and value.
+
+##  dictutil.get
+
+Returns the value of the item specified by `key_path`.
+
+`dictutil.get(dic, key_path, vars=v, default=3)`
+ is equivalent to
+`dictutil.make_getter(key_path, default=3)(dic, vars=v)`
+
+**syntax**:
+`dictutil.get(dic, key_path, vars=None, default=0, ignore_vars_key_error=None)`
+
+**arguments**:
+
+-   `dic`:
+    dictionary.
+
+-   `key_path`:
+    is a dot separated path string of key hierarchy to get an item from a
+    dictionary.
+
+    Example: `foo.bar` is same as `some_dict["foo"]["bar"]`.
+
+-   `vars`:
+    is a dictionary contains dynamic keys in `key_path`.
+
+    `dictutil.get({'a':1}, '$foo', vars={"foo":"a"})`
+    is same as
+    `dictutil.get({'a':1}, 'a')`
+
+-   `default`:
+    is the default value if the item is not found.
+    For example when `foo.bar` is used on a dictionary `{"foo":{}}`.
+
+    It must be a primitive value such as `int`, `float`, `bool`, `string` or `None`.
+
+-   `ignore_vars_key_error`:
+    specifies if it should ignore when a dynamic key does not present in
+    `vars`.
+
+    By default it is `True`.
+
+    If it is `True`, default value is returned.
+
+    If it is `False`, `KeyError` will be raised.
+
+**return**:
+item value it found by `key_path`, or `default`
 
 ##  dictutil.make_getter
 
@@ -306,6 +422,123 @@ print _set(tm, 15, vars={'subfield': 'hour'})
 # {"time": {"hour": 15, "minute": 0}}
 ```
 
+## dictutil.contains
+
+**syntax**:
+`dictutil.contains(a, b)`
+
+**arguments**:
+
+-   `a`:
+    is a containing dict or primitive type value.
+
+-   `b`:
+    is a contained dict or primitive type value.
+
+**return**:
+`true` if `a` contains `b`. Or `false`
+
+heck if dict `a` contains dict `b`.
+
+**Contain** means `key_path` for `b` is a subset of `key_path` for `a`.
+
+To explain this concept, we need two definitions:
+
+-   `key_path`: is a series of dict keys to access (nested) dict field.
+    For example, there is a dict `a = {"x":{"y":3}}`, key path `.x.y` is used to
+    access `3`.
+
+    A **non-leaf** `key_path` is a prefix of some other `key_path` and is used
+    to access an intermedia dict, such as `.x`.
+
+    A **leaf** `key_path` is **NOT** a prefix of any other `key_path` and is
+    used to access a primitive value, such as `.x.y`.
+
+-   `contain`:
+    There are two dict `a` and `b`.
+    For any finite `key_path` `pb` in `b`, if:
+
+    -   `pb` is also a valid `key_path` in `a`,
+    -   and: if `pb` is a leaf `key_path` and the values referred by `pb` in `a`
+        and `b` are the same.
+
+    then `a` contains `b`.
+
+    Example:
+
+    ```
+    a = {"x":1}
+    b = {"x":1, "y":2}
+    ```
+
+    In the above example the only `key_path` in `a` is `.x` which is also a valid `key_path`
+    in `b` and `a.x == b.x`. Thus `b contains a`.
+
+    But `a does NOT contain b` because `.y` in `b` is not a valid `key_path` in
+    `a`.
+
+    ```
+    a = {"x":{}}
+    b = {"x":1, "y":2}
+    ```
+
+    In the above example `b does NOT contains a` because `a.x` is a dict but
+    `b.x` is a number.
+
+    ```
+    a = {"x":{}}
+    b = {"x":{"x":{}}}
+    a.x.x = a
+    b.x.x.x = b
+    ```
+
+    In the above example `b contains a` and `a contains b` because they both
+    have the same key path set: `(.x)+`:
+
+    ```
+    .x
+    .x.x
+    .x.x.x
+    ...
+    ```
+
+    If a and b are both primitive type, "contains" is defined by a==b.
+
+---
+
+The algorithm to compare two dict recursively:
+
+For dicts with circular references, such as:
+
+```
+a.x.x = a
+b.x.x.x = b
+
+and
+
+a.x.x = b
+b.x.x.x = a
+```
+
+We compare two dicts by comparing every `key_path` in them.
+In the above two examples, `a` and `b` contain each other, because the
+set of `key_path` in `a` and `b` are both: `(.x)+`.
+
+Algorithm:
+
+-   Depth first traverse `b` to iterate all possible leaf and non-leaf `key_path` in it.
+
+-   And check if this `key_path` is also valid in `a`.
+
+-   If a `key_path` is a leaf `key_path`, the values this `key_path` referring
+    in `a` and `b` must be the same.
+
+-   If a `key_path` is a non-leaf `key_path`, and they points to a pair of nodes
+    we have already compared, stop traversal of this `key_path`, because further
+    traversal does not produce more possible `key_path`.
+
+    Thus we record every pair of `a` tree node and `b` tree node that we have
+    compared in the traversal.
 
 #   Author
 

@@ -8,7 +8,8 @@
   - [Module List](#module-list)
 - [Install](#install)
 - [Usage](#usage)
-  - [Update sub repo](#update-sub-repo)
+- [Test](#test)
+- [For developer](#for-developer)
 - [Author](#author)
 - [Copyright and License](#copyright-and-license)
 
@@ -29,32 +30,33 @@ library of our devops platform.
 
 #   Description
 
-There are several native modules like `utfjson`,
-along with several external modules like `jobq`, which are imported with
-`script/git-subrepo`(`git-subrepo` is also maintained by itself).
-
 ##  Module List
 
 There is a `README.md` for each module.
 
 | name                           | description                                                                           |
 | :--                            | :--                                                                                   |
-| script/git-subrepo             | A shell script maintaining sub module                                                 |
+| [cacheable](cacheable)         | Cache data which access frequently                                                    |
 | [cachepool](cachepool)         | Reusable object cache in process                                                      |
 | [daemonize](daemonize)         | Start, stop or restart a daemon process                                               |
 | [dictutil](dictutil)           | Dictionary helper utility                                                             |
+| [etcd](etcd)                   | etcd client                                                                           |
+| [http](http)                   | HTTP/1.1 client                                                                       |
 | [humannum](humannum)           | Convert number to human readable number string                                        |
 | [jobq](jobq)                   | Process serial of input elements with several functions concurrently and sequentially |
+| [logutil](logutil)             | Utility functions to create logger or make log message                                |
 | [mysqlconnpool](mysqlconnpool) | Mysql connection pool with MySQLdb in python                                          |
 | [net](net)                     | Network utility                                                                       |
-| [strutil](strutil)             | A collection of helper functions used to manipulate string                            |
-| [utfjson](utfjson)             | Force `json.dump` and `json.load` in `utf-8` encoding                                 |
-| [timeutil](timeutil)           | Support specify time format output and get current ts, ms, us api etc                 |
 | [portlock](portlock)           | cross process lock                                                                    |
+| [proc](proc)                   | Utility to create sub process                                                         |
+| [redisutil](redisutil)         | For using redis more easily.                                                          |
+| [strutil](strutil)             | A collection of helper functions used to manipulate string                            |
+| [threadutil](threadutil)       | Utility functions for better management of threads                                    |
+| [timeutil](timeutil)           | Support specify time format output and get current ts, ms, us api etc                 |
+| [utfjson](utfjson)             | Force `json.dump` and `json.load` in `utf-8` encoding                                 |
+| [zkutil](zkutil)               | Utility functions for zookeeper                                                       |
 
 #   Install
-
-This package does not support installation.
 
 Just clone it and copy it into your project source folder.
 
@@ -80,22 +82,25 @@ jobq.run([0, 1, 2], [add1, printarg])
 # > 3
 ```
 
-##  Update sub repo
+See the `README.md` of sub modules for detail.
 
->   You do not need to read this chapter if you are not a maintainer.
+#   Test
 
-First update sub repo config file `.gitsubrepo`
-and run `git-subrepo`.
-
-`git-subrepo` will fetch new changes from all sub repos and merge them into
-current branch `mater`:
+Run one of following to test all, a module, a TestCase or a function.
 
 ```
-./script/git-subrepo/git-subrepo
+./script/t.sh
+./script/t.sh zkutil
+./script/t.sh zkutil.test
+./script/t.sh zkutil.test.test_zkutil
+./script/t.sh zkutil.test.test_zkutil.TestZKUtil
+./script/t.sh zkutil.test.test_zkutil.TestZKUtil.test_lock_data
 ```
 
-`git-subrepo` is a tool in shell script.
-It merges sub git repo into the parent git working dir with `git-submerge`.
+#   For developer
+
+There are several scripts for developers.
+See [script](script).
 
 #   Author
 

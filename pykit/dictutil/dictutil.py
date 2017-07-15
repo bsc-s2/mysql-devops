@@ -2,6 +2,7 @@
 # coding: utf-8
 
 import types
+from collections import defaultdict
 
 
 def depth_iter(mydict, ks=None, maxdepth=10240, intermediate=False):
@@ -45,6 +46,44 @@ def breadth_iter(mydict):
 
             if isinstance(v, dict):
                 q.append((ks, v))
+
+
+def get(dic, key_path, vars=None, default=0, ignore_vars_key_error=None):
+
+    if vars is None:
+        vars = {}
+
+    if ignore_vars_key_error is None:
+        ignore_vars_key_error = True
+
+    _default = vars.get('_default', default)
+    node = dic
+
+    _keys = key_path.split('.')
+    if _keys == ['']:
+        return node
+
+    for k in _keys:
+
+        if k.startswith('$'):
+            k = k[1:]
+            if k in vars:
+                key = vars[k]
+            else:
+                if ignore_vars_key_error:
+                    return _default
+                else:
+                    raise KeyError('{k} does not exist in vars: {vars}'.format(
+                            k=k, vars=vars))
+        else:
+            key = k
+
+        if key not in node:
+            return _default
+
+        node = node[key]
+
+    return node
 
 
 def make_getter_str(key_path, default=0):
@@ -125,6 +164,115 @@ def make_setter(key_path, value=None, incr=False):
         return _node[k]
 
     return _set_dict
+
+
+def _contains(a, b, ref_table):
+    if a is b:
+        return True
+
+    if (isinstance(a, list) and isinstance(b, list)
+            or (isinstance(a, tuple) and isinstance(b, tuple))):
+
+        if len(a) < len(b):
+            return False
+
+        for i, v in enumerate(b):
+            if not _contains(a[i], v, ref_table):
+                return False
+        else:
+            return True
+
+    if not isinstance(a, dict) or not isinstance(b, dict):
+        return a == b
+
+    id_a, id_b = id(a), id(b)
+
+    if ref_table[id_a].get(id_b) is not None:
+        return ref_table[id_a][id_b]
+
+    ref_table[id_a][id_b] = True
+
+    for k, v in b.items():
+        if a.get(k) is None:
+            return False
+
+        if not _contains(a[k], v, ref_table):
+            return False
+
+    return True
+
+
+def contains(a, b):
+    return _contains(a, b, defaultdict(dict))
+
+class AttrDict(dict):
+
+    '''
+    a = AttrDict({1:2}) # {1:2}
+    a = AttrDict(x=3)   # {"x":3}
+    a.x                 # 3
+    a['x']              # 3
+
+    Some pros:
+
+    - It actually works!
+    - No dictionary class methods are shadowed (e.g. .keys() work just fine)
+    - Attributes and items are always in sync
+    - Trying to access non-existent key as an attribute correctly raises AttributeError instead of KeyError
+
+    Cons:
+
+    - Methods like .keys() will not work just fine if they get overwritten by incoming data
+    - Causes a memory leak in Python < 2.7.4 / Python3 < 3.2.3
+    - Pylint goes bananas with E1123(unexpected-keyword-arg) and E1103(maybe-no-member)
+    - For the uninitiated it seems like pure magic.
+
+    Issues:
+
+    - Dictionary key overrides dictionary methods:
+
+      d = AttrDict()
+      d.update({'items':["a", "b"]})
+      d.items() # TypeError: 'list' object is not callable
+
+    '''
+
+    def __init__(self, *args, **kwargs):
+        super(AttrDict, self).__init__(*args, **kwargs)
+        self.__dict__ = self
+
+
+def attrdict(*args, **kwargs):
+    """
+    Make a dict-like object whose keys can also be accessed with attribute.
+    You can use an AttrDict instance just like using a dict instance.
+    """
+
+    d = dict(*args, **kwargs)
+    ref = {}
+
+    return _attrdict(d, ref)
+
+
+def _attrdict(d, ref):
+
+    if not isinstance(d, dict):
+        return d
+
+    if isinstance(d, AttrDict):
+        return d
+
+    if id(d) in ref:
+        return ref[id(d)]
+
+    # id() is the memory address of an object, thus it is unique.
+    ad = AttrDict(d)
+    ref[id(d)] = ad
+
+    for k in d.keys():
+        ad[k] = _attrdict(d[k], ref)
+
+    return ad
 
 
 def _get_zero_value_of(val):

@@ -1,13 +1,17 @@
 import unittest
 
-import net
+from pykit import ututil
+from pykit import net
 
+dd = ututil.dd
 
 class TestNet(unittest.TestCase):
 
     def test_const(self):
         self.assertEqual('PUB', net.PUB)
         self.assertEqual('INN', net.INN)
+
+        self.assertEqual('127.0.0.1', net.LOCALHOST)
 
     def test_exception(self):
         [net.NetworkError, net.IPUnreachable]
@@ -40,11 +44,18 @@ class TestNet(unittest.TestCase):
 
             '1.1.1.1.',
             '.1.1.1.1',
+            '1:1.1.1',
+            '1:1:1.1',
 
             '256.1.1.1',
             '1.256.1.1',
             '1.1.256.1',
             '1.1.1.256',
+
+            '1.1.1.1.',
+            '1.1.1.1.1',
+            '1.1.1.1.1.',
+            '1.1.1.1.1.1',
         )
 
         for inp in cases_not_ip4:
@@ -66,6 +77,41 @@ class TestNet(unittest.TestCase):
 
         for inp in cases_ip4:
             self.assertEqual(True, net.is_ip4(inp), inp)
+
+    def test_is_ip4_loopback_false(self):
+
+        cases_ip4 = (
+            '0.0.0.0',
+            '1.1.1.1',
+            '126.0.1.0',
+            '15.1.0.0',
+            '255.0.0.255',
+
+            '126.0.0.1',
+            '128.0.0.1',
+
+            '255.255.255.255',
+        )
+
+        for ip in cases_ip4:
+            self.assertEqual(False, net.is_ip4_loopback(ip), ip)
+
+    def test_is_ip4_loopback_true(self):
+
+        cases_ip4 = (
+            '127.0.0.0',
+            '127.1.1.1',
+            '127.0.1.0',
+            '127.1.0.0',
+            '127.0.0.255',
+
+            '127.0.0.1',
+
+            '127.255.255.255',
+        )
+
+        for ip in cases_ip4:
+            self.assertEqual(True, net.is_ip4_loopback(ip), ip)
 
     def test_ip_class_and_is_xxx(self):
         cases_pub = (
@@ -181,6 +227,8 @@ class TestNet(unittest.TestCase):
         cases = (
             ('1.2.3.4',        ['1.2.3.4']),
             ('1.2.3.4,127.0.', ['1.2.3.4', '127.0.']),
+            ('-1.2.3.4,127.0.', [('1.2.3.4', False), '127.0.']),
+            ('-1.2.3.4,-127.0.', [('1.2.3.4', False), ('127.0.', False)]),
         )
 
         for inp, outp in cases:
@@ -192,8 +240,15 @@ class TestNet(unittest.TestCase):
             ' , ',
             '1,',
             ',1',
+            '-1,',
+            ',-1',
+            '127,-',
+            '-,127',
         )
         for inp in cases_err:
+
+            dd('should fail with: ', repr(inp))
+
             try:
                 net.parse_ip_regex_str(inp)
                 self.fail('should fail with ' + repr(inp))
@@ -213,7 +268,21 @@ class TestNet(unittest.TestCase):
 
             (['127.0.0.1', '192.168.0.1'], ['1'],
              ['127.0.0.1', '192.168.0.1']),
+
+            # negative match
+            (['127.0.0.1', '192.168.0.1'], [('1', False)],
+             []),
+
+            (['127.0.0.1', '192.168.0.1'], [('127', False), ('192', False)],
+             []),
+
+            (['127.0.0.1', '192.168.0.1'], [('12', False)],
+             ['192.168.0.1']),
+
+            (['127.0.0.1', '192.168.0.1'], ['22', ('12', False)],
+             []),
         )
 
         for ips, regs, outp in cases:
+            dd('case: ', ips, regs, outp)
             self.assertEqual(outp, net.choose_by_regex(ips, regs))

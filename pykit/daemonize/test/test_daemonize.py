@@ -2,25 +2,24 @@
 # coding: utf-8
 
 import os
-import subprocess
 import time
 import unittest
+
+from pykit import proc
+from pykit import ututil
+from pykit import daemonize
+
+dd = ututil.dd
 
 this_base = os.path.dirname(__file__)
 
 
 def subproc(script):
-
-    subproc = subprocess.Popen(['sh'],
-                               close_fds=True,
-                               stdin=subprocess.PIPE,
-                               stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE)
-
-    out, err = subproc.communicate(script)
-
-    subproc.wait()
-    return (subproc.returncode, out, err)
+    return proc.shell_script(script,
+                             env=dict(
+                                 PYTHONPATH=this_base + '/../..',
+                             ),
+                             )
 
 
 def read_file(fn):
@@ -45,14 +44,14 @@ class TestDaemonize(unittest.TestCase):
         try:
             subproc('python2 {b}/foo.py stop'.format(b=this_base))
         except Exception as e:
-            print repr(e)
+            dd(repr(e))
 
         time.sleep(0.1)
 
         try:
             subproc('python2 {b}/bar.py stop'.format(b=this_base))
         except Exception as e:
-            print repr(e)
+            dd(repr(e))
 
         # remove written file
 
@@ -119,3 +118,8 @@ class TestDaemonize(unittest.TestCase):
 
         self.assertEqual(None, read_file(self.bar_fn),
                          'bar.py not started or run')
+
+    def test_default_pid_file(self):
+
+        d = daemonize.Daemon()
+        self.assertEqual('/var/run/__main__', d.pidfile)

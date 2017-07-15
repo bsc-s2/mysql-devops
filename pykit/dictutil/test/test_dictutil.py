@@ -3,7 +3,10 @@
 
 import unittest
 
-import dictutil
+from pykit import dictutil
+from pykit import ututil
+
+dd = ututil.dd
 
 
 class TestDictDeepIter(unittest.TestCase):
@@ -228,14 +231,29 @@ class TestGetter(unittest.TestCase):
 
         cases = (
 
+            ('', 0,
+             {"x": 1}, {},
+             {"x": 1}
+             ),
+
             ('x', 0,
              {}, {},
              0
              ),
 
+            ('x', 0,
+             {'x': {'y': 3}}, {},
+             {'y': 3}
+             ),
+
             ('x', 55,
              {}, {},
              55
+             ),
+
+            ('x', 55,
+             {}, {'_default': 66},
+             66
              ),
 
             ('x', 55,
@@ -291,6 +309,50 @@ class TestGetter(unittest.TestCase):
                                  rst=repr(rst),
                              )
                              )
+
+            # test dictutil.get() with the same set of cases
+
+            rst = dictutil.get(_dic, _in, vars=_vars, default=_default)
+            dd('dictutil.get({dic}, {key_path} vars={vars}, default={default})'.format(
+                dic=_dic,
+                key_path=_in,
+                vars=_vars,
+                default=_default,
+            ))
+            dd(rst)
+
+            self.assertEqual(_out, rst,
+                             'input: {_in}, {_default}, {_dic}, {_vars} expected: {_out}, actual: {rst}'.format(
+                                 _in=repr(_in),
+                                 _default=repr(_default),
+                                 _dic=repr(_dic),
+                                 _vars=repr(_vars),
+                                 _out=repr(_out),
+                                 rst=repr(rst),
+                             )
+                             )
+
+    def test_get_ignore_vars_key_error(self):
+
+        cases = (
+                ({}, '$a', {"a": "x"}, None, 0),
+                ({}, '$a', {"a": "x"}, True, 0),
+        )
+
+        for case in cases:
+
+            dd('case: ', case)
+
+            dic, key_path, vars, ign, expected = case
+            rst = dictutil.get(dic, key_path, vars=vars, ignore_vars_key_error=ign)
+
+            dd('rst: ', rst)
+
+            self.assertEqual(expected, rst)
+
+        with self.assertRaises(KeyError):
+            dictutil.get({}, '$a', {}, ignore_vars_key_error=False)
+
 
 
 class TestSetter(unittest.TestCase):
@@ -521,3 +583,133 @@ class TestSetter(unittest.TestCase):
                                  rst=repr(rst),
                              )
                              )
+
+
+class TestAttrDict(unittest.TestCase):
+
+    def test_attrdict(self):
+
+        cases = (
+                ([],
+                 {},
+                 {}
+                 ),
+
+                ([],
+                 {'a': 2},
+                 {'a': 2}
+                 ),
+
+                ([{'x': 2}],
+                 {'a': 4},
+                 {'x': 2, 'a': 4},
+                 ),
+        )
+
+        for args, kwargs, expected in cases:
+            rst = dictutil.attrdict(*args, **kwargs)
+            self.assertEqual(expected, rst,
+                             'input: {a} {kw} {e}, rst: {rst}'.format(
+                                 a=args, kw=kwargs, e=expected, rst=rst))
+
+            for k in rst:
+                self.assertEqual(rst[k], getattr(rst, k))
+
+    def test_dict_method(self):
+
+        ad = dictutil.attrdict(a=1, b=2)
+
+        self.assertEqual(['a', 'b'], ad.keys())
+        self.assertEqual([1, 2], ad.values())
+        self.assertEqual([('a', 1), ('b', 2)], ad.items())
+
+    def test_recursive(self):
+
+        ad = dictutil.attrdict(
+            x=1, y={'a': 3, 'b': dict(c=4), 'd': dictutil.attrdict(z=5)})
+
+        self.assertEqual(1, ad.x)
+        self.assertEqual({'a': 3, 'b': {'c': 4}, 'd': {'z': 5}}, ad.y)
+        self.assertEqual(3, ad.y.a)
+        self.assertEqual(4, ad.y.b.c)
+        self.assertEqual(5, ad.y.d.z)
+
+    def test_attr_overriding(self):
+
+        ad = dictutil.attrdict(items=1)
+
+        with self.assertRaises(TypeError):
+            ad.items()
+
+    def test_ref_to_same_item(self):
+
+        x = {'a': 1}
+        ad = dictutil.attrdict(u=x, v=x)
+
+        self.assertTrue(ad.u is ad.v)
+
+        x['x'] = x
+        ad = dictutil.attrdict(x)
+
+        self.assertTrue(isinstance(ad, dictutil.AttrDict))
+        self.assertTrue(isinstance(ad.x, dictutil.AttrDict))
+        self.assertTrue(ad.x is not ad, 'attrdict does create a new dict')
+        self.assertTrue(
+            ad.x.x is ad.x, 'circular references work for all dict items.')
+        self.assertTrue(ad.x.x.x is ad.x.x,
+                        'circular references work for all dict items.(2)')
+
+
+class TestIsSubDict(unittest.TestCase):
+
+    def test_dict(self):
+
+        for case in [
+            (1, 1, True),
+            (1, 2, False),
+            ("x", "x", True),
+            ("x", "b", False),
+            (None, None, True),
+
+            ({"a": 1}, {"a": 1}, True),
+            ({}, {"a": None}, False),
+            ({"a": 1}, {}, True),
+            ({"a": 1}, None, False),
+            (None, {"a": 1}, False),
+
+            ({"a": (1, 2)}, {"a": (1, 2)}, True),
+            ({"a": (1, 2, 3)}, {"a": (1, 2)}, True),
+
+            ({"a": 1}, [], False),
+            ({"a": [1, (2, 3)]}, {"a": [1, (2,)]}, True),
+            ({"a": [1, (2, 3)]}, {"a": [1, (2, 4)]}, False),
+            ({"a": [1, (2, 3)]}, {"a": [1, (2, 3, 4)]}, False),
+
+            ({"a": 1, "b": 2}, {"a": 1}, True),
+            ({"a": 1}, {"a": 1, "b": 2}, False),
+            ({"a": 1, "b": {"c": 3, "d": 4}}, {"a": 1, "b": {"d": 4}}, True),
+            ({"a": 1, "b": {"c": 3, "d": 4}}, {"a": 1, "b": 2}, False),
+        ]:
+            self.assertEqual(dictutil.contains(case[0], case[1]), case[2])
+
+    def test_recursive_dict(self):
+        a = {}
+        a[1] = {}
+        a[1][1] = a
+
+        b = {}
+        b[1] = {}
+        b[1][1] = {}
+        b[1][1][1] = b
+
+        self.assertEqual(dictutil.contains(a, b), True)
+
+    def test_recursive_dict_with_list(self):
+        a = {'k': [0, 2]}
+        a['k'][0] = {'k': [0, 2]}
+        a['k'][0]['k'][0] = a
+
+        b = {'k': [0, 2]}
+        b['k'][0] = b
+
+        self.assertEqual(dictutil.contains(a, b), True)

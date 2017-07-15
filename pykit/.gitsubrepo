@@ -1,9 +1,5 @@
 [ remote: https://github.com/ ]
-[ base: script ]
-
-git-subrepo             baishancloud/                           master
-
 [ base: ]
 
-jobq                    baishancloud/                           master
-mysqlconnpool           baishancloud/                           master
+git-subrepo             baishancloud/git-subrepo            master   git-subrepo
+stopwatch.py            baishancloud/stopwatch              master   stopwatch.py
