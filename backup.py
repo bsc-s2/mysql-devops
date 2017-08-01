@@ -30,6 +30,7 @@ if __name__ == "__main__":
                     conf_base=conf_base, port=port)
 
             conf = mysqlbackup.load_conf_from_file(conf_path)
+            conf.setdefault('date_str', mysqlbackup.backup_date_str())
 
             mb = mysqlbackup.MysqlBackup(conf)
             mb.backup()

@@ -527,7 +527,7 @@ class MysqlBackup(object):
             'backup_tgz_des3_meta': {},
         })
 
-        bkp_conf.setdefault('date_str',  cdate("%Y_%m_%d"))
+        bkp_conf.setdefault('date_str',  backup_date_str())
 
         ptn = [
             ('mysql_user',           "mysql-{port}"),
@@ -717,6 +717,10 @@ def _shell_run(cmd, cwd=None):
         err = []
 
     return proc.returncode, out, err
+
+
+def backup_date_str():
+    return cdate("%Y_%m_%d")
 
 
 def cdate(fmt):
