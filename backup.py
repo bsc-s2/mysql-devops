@@ -22,6 +22,7 @@ if __name__ == "__main__":
     # example: /s2/mysql/backup_conf
     conf_base = args.conf_base
     ports = args.ports
+    date_str = mysqlbackup.backup_date_str()
 
     for port in ports:
 
@@ -30,7 +31,7 @@ if __name__ == "__main__":
                     conf_base=conf_base, port=port)
 
             conf = mysqlbackup.load_conf_from_file(conf_path)
-            conf.setdefault('date_str', mysqlbackup.backup_date_str())
+            conf.setdefault('date_str', date_str)
 
             mb = mysqlbackup.MysqlBackup(conf)
             mb.backup()
