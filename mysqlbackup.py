@@ -365,22 +365,30 @@ class MysqlBackup(object):
         binlog_fns = [self.render('{backup_binlog_dir}/') + x
                       for x in binlog_fns]
 
-        self.info(
-            'apply only-in-binlog events back to instance, from: ' + repr(binlog_fns))
+        self.info('apply only-in-binlog events back to instance, from: ' + repr(binlog_fns))
 
         last_binlog_file, last_binlog_pos, gtid_set = self.get_backup_binlog_info()
 
-        self.shell_run('apply binlog not in backup from {backup_binlog_dir}',
-                       ('bin/mysqlbinlog'
-                        '    --disable-log-bin'
-                        '    --exclude-gtids="{gtid_set_str}"'
-                        '    {binlog_fns}'
-                        ' | bin/mysql --socket={mysql_socket} '
-                        ),
-                       binlog_fns=' '.join(binlog_fns),
-                       gtid_set_str=make_gtid_set_str(gtid_set),
-                       cwd=self.bkp_conf['mysql_base']
-                       )
+        for bfn in binlog_fns:
+
+            # apply binlog file one by one or sometimes it experience
+            # 'Connection Lost' issue.
+
+            self.info('about to apply local binlog: {bfn}'.format(bfn=bfn))
+
+            self.shell_run('apply binlog not in backup from {backup_binlog_dir}',
+                           ('bin/mysqlbinlog'
+                            '    --disable-log-bin'
+                            '    --exclude-gtids="{gtid_set_str}"'
+                            '    {bfn}'
+                            ' | bin/mysql --socket={mysql_socket} '
+                            ),
+                           bfn=bfn,
+                           gtid_set_str=make_gtid_set_str(gtid_set),
+                           cwd=self.bkp_conf['mysql_base']
+                           )
+
+            self.info('finsihed applying local binlog: {bfn}'.format(bfn=bfn))
 
         self.stop_tmp_mysql(proc)
         self.info_r('apply only-in-binlog events OK')
