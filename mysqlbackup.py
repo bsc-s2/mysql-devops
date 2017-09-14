@@ -441,7 +441,18 @@ class MysqlBackup(object):
 
             if rst['Slave_IO_State'] == 'Waiting for master to send event':
 
-                if int(rst['Seconds_Behind_Master']) < 1:
+                rcv = mysqlutil.gtidset.load(rst["Retrieved_Gtid_Set"])
+                exc = mysqlutil.gtidset.load(rst["Executed_Gtid_Set"])
+
+                diff = mysqlutil.gtidset.compare(exc, rcv)
+
+                # - lagging seconds is small
+                # - received but not unexecuted events are little(mysql running on 1000 tps is normal).
+                # - only one actively changing uuid(mysql instance), the only one
+                #   serving user requests.
+                if (int(rst['Seconds_Behind_Master']) < 1
+                    and diff['onlyright']['length'] < 1000
+                        and len(diff['onlyright']['gtidset']) <= 1):
                     # there could be events on remote created in less than 1
                     # second
                     time.sleep(1)
@@ -449,10 +460,24 @@ class MysqlBackup(object):
 
             self.debug('applying remote binlog:'
                        ' io_state: "{Slave_IO_State}"'
-                       ' recv: "{Retrieved_Gtid_Set}"'
-                       ' exec: "{Executed_Gtid_Set}"'.format(**rst))
+                       ' recv: "{rcv}"'
+                       ' exec: "{exc}"'.format(rcv=rcv, exc=exc, **rst))
 
-            time.sleep(10)
+            self.debug('applying remote binlog:'
+                       ' recv but not exec: "{diff}"'.format(diff=diff['onlyright'],))
+
+            self.debug('applying remote binlog:'
+                       ' not on remote binlog: "{diff}"'.format(diff=diff['onlyleft'],))
+
+            sleep_time = int(rst['Seconds_Behind_Master']) / 5
+
+            if sleep_time > 60 * 5:
+                sleep_time = 60 * 5
+
+            if sleep_time < 30:
+                sleep_time = 30
+
+            time.sleep(sleep_time)
 
     def start_tmp_mysql(self, opts=()):
 
