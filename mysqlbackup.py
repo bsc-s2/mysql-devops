@@ -27,6 +27,7 @@ from boto3.s3.transfer import TransferConfig
 from botocore.client import Config
 
 from pykit import mysqlconnpool
+from pykit import mysqlutil
 
 logger = logging.getLogger(__name__)
 
@@ -384,7 +385,7 @@ class MysqlBackup(object):
                             ' | bin/mysql --socket={mysql_socket} '
                             ),
                            bfn=bfn,
-                           gtid_set_str=make_gtid_set_str(gtid_set),
+                           gtid_set_str=mysqlutil.gtidset.dump(gtid_set, line_break=''),
                            cwd=self.bkp_conf['mysql_base']
                            )
 
@@ -602,22 +603,8 @@ class MysqlBackup(object):
 
         last_binlog_file = fields[0]
         last_binlog_pos = int(fields[1])
-        _set = fields[2].split(',')
 
-        self.debug('gtid set: ' + repr(_set))
-
-        gtid_set = {}
-        for elt in _set:
-
-            uuid, rng = elt.split(':')
-            rng = rng.split('-')
-
-            # single transaction range is just xxx:1, not xxx:1-2
-            if len(rng) == 1:
-                rng = [rng[0], rng[0]]
-
-            gtid_set[uuid] = [int(rng[0]), int(rng[1])]
-
+        gtid_set = mysqlutil.gtidset.load(fields[2])
         self.debug('gtid_set extracted: ' + repr(gtid_set))
 
         return last_binlog_file, last_binlog_pos, gtid_set
@@ -684,14 +671,6 @@ class MysqlBackup(object):
 
     def debug(self, s):
         logger.debug(self.bkp_conf['mes'] + ': ' + s)
-
-
-def make_gtid_set_str(gtid_set):
-    ranges = []
-    for uuid, rng in gtid_set.items():
-        ranges.append('{uuid}:{start}-{end}'.format(uuid=uuid,
-                                                    start=rng[0], end=rng[1]))
-    return ','.join(ranges)
 
 
 def mysql_query(conn, sql):
