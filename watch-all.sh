@@ -5,7 +5,7 @@ while ``; do
     found=0
 
     for fn in $(ls /var/run/mysqld/*.sock); do
-        port=${fn%.pid}
+        port=${fn%.sock}
         port=${port#*-}
         clear
         ./watch-slave.sh $port -
