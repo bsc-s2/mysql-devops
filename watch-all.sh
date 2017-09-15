@@ -4,7 +4,7 @@ while ``; do
 
     found=0
 
-    for fn in $(ls /var/run/mysqld); do
+    for fn in $(ls /var/run/mysqld/*.sock); do
         port=${fn%.pid}
         port=${port#*-}
         clear

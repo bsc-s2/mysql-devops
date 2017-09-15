@@ -3,7 +3,7 @@
 
 cd /usr/local/mysql-5.7.13
 
-for fn in $(ls /var/run/mysqld); do
+for fn in $(ls /var/run/mysqld/*.sock); do
     port=${fn%.pid}
     port=${port#*-}
 
