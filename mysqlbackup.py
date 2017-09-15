@@ -567,7 +567,7 @@ class MysqlBackup(object):
             ('mysql_user',           "mysql-{port}"),
             ('mysql_user_group',     "mysql"),
 
-            ('mysql_socket',         "/tmp/mysql-{port}.sock"),
+            ('mysql_socket',         "/var/run/mysqld/mysqld-{port}.sock"),
             ('mysql_pid_path',       "/var/run/mysqld/mysqld-{port}.pid"),
 
             ('mysql_data_dir',       "{data_base}/mysql-{port}"),

@@ -1,7 +1,7 @@
 #!/bin/sh
 
 port=$1
-mysql_cmd="./bin/mysql -s --socket=/tmp/mysql-${port}.sock -e "
+mysql_cmd="./bin/mysql -s --socket=/var/run/mysqld/mysqld-${port}.sock -e "
 
 cd /usr/local/mysql-5.7.13
 

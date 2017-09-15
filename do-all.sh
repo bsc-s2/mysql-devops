@@ -7,7 +7,7 @@ for fn in $(ls /var/run/mysqld); do
     port=${fn%.pid}
     port=${port#*-}
 
-    mysql_cmd="./bin/mysql -s --socket=/tmp/mysql-${port}.sock -e "
+    mysql_cmd="./bin/mysql -s --socket=/var/run/mysqld/mysqld-${port}.sock -e "
 
     $mysql_cmd "$@"
 

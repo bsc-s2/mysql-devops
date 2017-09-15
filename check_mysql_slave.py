@@ -11,7 +11,7 @@ from pykit import mysqlconnpool
 def get_slave_status(port):
 
     pool = mysqlconnpool.make({
-        'unix_socket': '/tmp/mysql-{p}.sock'.format(p=port)
+        'unix_socket': '/var/run/mysqld/mysqld-{p}.sock'.format(p=port)
     })
 
     try:
