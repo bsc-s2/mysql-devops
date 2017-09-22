@@ -446,6 +446,14 @@ class MysqlBackup(object):
 
                 diff = mysqlutil.gtidset.compare(exc, rcv)
 
+                self.debug('applying remote binlog:'
+                           ' io_state: {Slave_IO_State}'
+                           ' recv: {rcv}'
+                           ' exec: {exc}'.format(rcv=rcv, exc=exc, **rst))
+
+                self.debug('applying remote binlog:'
+                           ' recv but not exec: "{diff}"'.format(diff=diff['onlyright'],))
+
                 # - lagging seconds is small
                 # - received but not unexecuted events are little(mysql running on 1000 tps is normal).
                 # - only one actively changing uuid(mysql instance), the only one
@@ -457,17 +465,6 @@ class MysqlBackup(object):
                     # second
                     time.sleep(1)
                     break
-
-            self.debug('applying remote binlog:'
-                       ' io_state: "{Slave_IO_State}"'
-                       ' recv: "{rcv}"'
-                       ' exec: "{exc}"'.format(rcv=rcv, exc=exc, **rst))
-
-            self.debug('applying remote binlog:'
-                       ' recv but not exec: "{diff}"'.format(diff=diff['onlyright'],))
-
-            self.debug('applying remote binlog:'
-                       ' not on remote binlog: "{diff}"'.format(diff=diff['onlyleft'],))
 
             sleep_time = int(rst['Seconds_Behind_Master']) / 5
 
