@@ -51,7 +51,7 @@ on right side(`b`) only.
 The item `onlyleft` or `onlyright` is a `rangeset.IntIncRangeSet` representing
 the gtid range which is on left(right) only, for each uuid.
 
-If there is not a gtid absent on the right side, `onlyleft` is `{"length":0,
+If there are not any gtid absent on the right side, `onlyleft` is `{"length":0,
 "gtidset": {}}` and vice versa:
 
 ```
