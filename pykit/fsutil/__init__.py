@@ -13,8 +13,16 @@ from .fsutil import (
     get_path_usage,
     makedirs,
     read_file,
+    remove,
     write_file,
+)
 
+from .cat import (
+    CatError,
+    LockTimeout,
+    NoData,
+    NoSuchFile,
+    Cat
 )
 
 __all__ = [
@@ -32,5 +40,13 @@ __all__ = [
     "get_path_usage",
     "makedirs",
     "read_file",
+    "remove",
     "write_file",
+
+
+    "CatError",
+    "LockTimeout",
+    "NoData",
+    "NoSuchFile",
+    "Cat"
 ]

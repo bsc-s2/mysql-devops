@@ -45,15 +45,18 @@ There is a `README.md` for each module.
 | [dictutil](dictutil)           | Dictionary helper utility                                                             |
 | [etcd](etcd)                   | etcd client                                                                           |
 | [fsutil](fsutil)               | File-system Utilities                                                                 |
+| [heap](heap)                   | Min heap                                                                              |
 | [http](http)                   | HTTP/1.1 client                                                                       |
 | [humannum](humannum)           | Convert number to human readable number string                                        |
 | [jobq](jobq)                   | Process serial of input elements with several functions concurrently and sequentially |
 | [logutil](logutil)             | Utility functions to create logger or make log message                                |
+| [mime](mime)                   | Utility functions to handle mime type                                                 |
 | [modutil](modutil)             | Submodule Utilities                                                                   |
 | [mysqlconnpool](mysqlconnpool) | Mysql connection pool with MySQLdb in python                                          |
 | [mysqlutil](mysqlutil)         | Mysql related datatype, operations                                                    |
 | [net](net)                     | Network utility                                                                       |
 | [portlock](portlock)           | cross process lock                                                                    |
+| [priorityqueue](priorityqueue) | Priority queue                                                                        |
 | [proc](proc)                   | Utility to create sub process                                                         |
 | [rangeset](rangeset)           | Segmented range.                                                                      |
 | [redisutil](redisutil)         | For using redis more easily.                                                          |
@@ -112,6 +115,7 @@ fsutil.write_file('bar', '123') # write_file sets file uid and gid to 2 and 3.
 
 -   `uid`: specifies default user-id  when file created, directory made.
 -   `gid`: specifies default group-id when file created, directory made.
+-   `log_dir`: specifies default base_dir when logger created.
 
 
 See the `README.md` of sub modules for detail.

@@ -1,3 +1,4 @@
+import errno
 import logging
 import os
 import subprocess
@@ -30,27 +31,29 @@ def subproc(script, cwd=None):
 
 
 def read_file(fn):
-    try:
-        with open(fn, 'r') as f:
-            cont = f.read()
-            return cont
-    except EnvironmentError:
-        return None
+    with open(fn, 'r') as f:
+        return f.read()
 
 
 def rm_file(fn):
     try:
         os.unlink(fn)
-    except EnvironmentError:
-        pass
+    except OSError as e:
+        if e.errno == errno.ENOENT:
+            pass
+        else:
+            raise
 
 
 class TestFileHandler(unittest.TestCase):
 
     def test_concurrent_write_and_remove(self):
 
-        l = logutil.make_logger('/tmp', log_name='rolling', log_fn='rolling.out',
-                                level=logging.DEBUG, fmt='message')
+        l = logutil.make_logger(base_dir='/tmp',
+                                log_name='rolling',
+                                log_fn='rolling.out',
+                                level=logging.DEBUG,
+                                fmt='message')
 
         n = 10240
         sess = {'running': True}
@@ -77,8 +80,10 @@ class TestLogutil(unittest.TestCase):
         rm_file('/tmp/t.out')
 
         # root logger
-        logutil.make_logger('/tmp', log_fn='t.out',
-                            level=logging.DEBUG, fmt='message')
+        logutil.make_logger(base_dir='/tmp',
+                            log_fn='t.out',
+                            level=logging.DEBUG,
+                            fmt='message')
 
     def test_get_root_log_fn(self):
 
@@ -180,8 +185,11 @@ class TestLogutil(unittest.TestCase):
 
         rm_file('/tmp/tt')
 
-        l = logutil.make_logger('/tmp', log_name='m', log_fn='tt',
-                                level='INFO', fmt='%(asctime)s-%(message)s',
+        l = logutil.make_logger(base_dir='/tmp',
+                                log_name='m',
+                                log_fn='tt',
+                                level='INFO',
+                                fmt='%(message)s',
                                 datefmt='%H%M%S'
                                 )
 
@@ -190,15 +198,50 @@ class TestLogutil(unittest.TestCase):
 
         cont = read_file('/tmp/tt').strip()
 
-        self.assertRegexpMatches(cont, '\d\d\d\d\d\d-info')
+        self.assertEqual(cont, 'info')
+
+    def test_make_logger_with_config(self):
+
+        code, out, err = subproc(
+            'python make_logger_with_config.py', cwd=os.path.dirname(__file__))
+        self.assertEqual(0, code)
+        self.assertEqual(out.strip(), 'info')
 
     def test_make_formatter(self):
         # how to test logging.Formatter?
         pass
 
     def test_make_file_handler(self):
-        # how to test logging.handlers.*?
-        pass
+
+        rm_file('/tmp/handler_change')
+
+        l = logutil.make_logger(base_dir='/tmp',
+                                log_name='h',
+                                log_fn='dd',
+                                level='INFO',
+                                fmt='%(message)s',
+                                datefmt='%H%M%S'
+                                )
+        l.handlers = []
+        handler = logutil.make_file_handler(base_dir='/tmp',
+                                            log_fn='handler_change',
+                                            fmt='%(message)s',
+                                            datefmt='%H%M%S')
+        l.addHandler(handler)
+
+        l.debug('debug')
+        l.info('info')
+
+        cont = read_file('/tmp/handler_change').strip()
+
+        self.assertEqual(cont, 'info')
+
+    def test_make_file_handler_with_config(self):
+
+        code, out, err = subproc(
+            'python make_file_handler_with_config.py', cwd=os.path.dirname(__file__))
+        self.assertEqual(0, code)
+        self.assertEqual(out.strip(), 'info')
 
     def test_add_std_handler(self):
 
@@ -206,3 +249,41 @@ class TestLogutil(unittest.TestCase):
             'python stdlog.py', cwd=os.path.dirname(__file__))
         self.assertEqual(0, code)
         self.assertEqual('stdlog', out.strip())
+
+    def test_set_logger_level(self):
+
+        cases = (
+            (None,                      'debug1\ndebug2'),
+            ('1_prefix',                'debug1\ndebug2\ndebug2'),
+            (('1_prefix', '2_prefix'),  'debug1\ndebug2'),
+            (('not_exist',),            'debug1\ndebug2\ndebug1\ndebug2'),
+            (('not_exist', '1_prefix'), 'debug1\ndebug2\ndebug2'),
+        )
+
+        for inp, expected in cases:
+            rm_file('/tmp/ss')
+
+            logger1 = logutil.make_logger(base_dir='/tmp',
+                                          log_name='1_prefix_1',
+                                          log_fn='ss',
+                                          level='DEBUG',
+                                          fmt='%(message)s',
+                                          datefmt='%H%M%S')
+
+            logger2 = logutil.make_logger(base_dir='/tmp',
+                                          log_name='2_prefix_1',
+                                          log_fn='ss',
+                                          level='DEBUG',
+                                          fmt='%(message)s',
+                                          datefmt='%H%M%S')
+            logger1.debug('debug1')
+            logger2.debug('debug2')
+
+            logutil.set_logger_level(level='INFO', name_prefixes=inp)
+
+            logger1.debug('debug1')
+            logger2.debug('debug2')
+
+            content = read_file('/tmp/ss')
+
+            self.assertEqual(expected, content.strip())

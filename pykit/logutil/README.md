@@ -17,6 +17,7 @@
   - [logutil.make_file_handler](#logutilmake_file_handler)
   - [logutil.make_formatter](#logutilmake_formatter)
   - [logutil.make_logger](#logutilmake_logger)
+  - [logutil.set_logger_level](#logutilset_logger_level)
   - [logutil.stack_format](#logutilstack_format)
   - [logutil.stack_list](#logutilstack_list)
   - [logutil.stack_str](#logutilstack_str)
@@ -239,7 +240,7 @@ log file name.
 ##  logutil.make_file_handler
 
 **syntax**:
-`logutil.make_file_handler(base_dir, log_fn, fmt=None, datefmt=None)`
+`logutil.make_file_handler(base_dir=None, log_fn=None, fmt=None, datefmt=None)`
 
 It creates a rolling log file handler.
 
@@ -252,9 +253,11 @@ log file.
 
 -   `base_dir`:
     specifies the dir of log file.
+    If it is `None`, use `config.log_dir` as default.
 
 -   `log_fn`:
     specifies the log file name.
+    If it is `None`, use `logutil.get_root_log_fn` to make a log file name.
 
 -   `fmt`:
     specifies log format.
@@ -294,7 +297,7 @@ an `logging.Formatter` instance.
 ##  logutil.make_logger
 
 **syntax**:
-`logutil.make_logger(base_dir, log_name=None, log_fn=None,
+`logutil.make_logger(base_dir=None, log_name=None, log_fn=None,
                      level=logging.DEBUG, fmt=None,
                      datefmt=None)`
 
@@ -304,6 +307,7 @@ It creates a logger with a rolling file hander and specified formats.
 
 -   `base_dir`:
     specifies the dir of log file.
+    If it is `None`, use `config.log_dir` as default.
 
 -   `log_name`:
     is the name of the logger to create.
@@ -329,6 +333,22 @@ It creates a logger with a rolling file hander and specified formats.
 
 **return**:
 a `logging.Logger` instance.
+
+##  logutil.set_logger_level
+
+**syntax**:
+`logutil.set_logger_level(level=logging.INFO, name_prefixes=None)`
+
+**arguments**:
+
+-   `level`:
+    specifies log level.
+    It could be int value such as `logging.DEBUG` or string such as `DEBUG`.
+
+-   `name_prefixes`:
+    specifies log prefixes which is operated.
+    It can be None, str or a tuple of str.
+    If `name_prefixes` is None, set the log level for all logger.
 
 ##  logutil.stack_format
 

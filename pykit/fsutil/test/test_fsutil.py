@@ -118,10 +118,11 @@ class TestFSUtil(unittest.TestCase):
 
         # space is changing..
 
-        self.assertAlmostEqual(st.f_frsize * st.f_bavail, rst['available'], delta=4*1024**2)
-        self.assertAlmostEqual(st.f_frsize * st.f_blocks, rst['total'], delta=4*1024**2)
-        self.assertAlmostEqual(st.f_frsize * (st.f_blocks - st.f_bavail), rst['used'], delta=4*1024**2)
-        self.assertAlmostEqual((st.f_blocks - st.f_bavail) * 100 / st.f_blocks, int(rst['percent'] * 100), delta=4*1024**2)
+        self.assertAlmostEqual(st.f_frsize * st.f_bavail, rst['available'], delta=4 * 1024**2)
+        self.assertAlmostEqual(st.f_frsize * st.f_blocks, rst['total'], delta=4 * 1024**2)
+        self.assertAlmostEqual(st.f_frsize * (st.f_blocks - st.f_bavail), rst['used'], delta=4 * 1024**2)
+        self.assertAlmostEqual((st.f_blocks - st.f_bavail) * 100 / st.f_blocks,
+                               int(rst['percent'] * 100), delta=4 * 1024**2)
 
         if st.f_bfree > st.f_bavail:
             self.assertLess(rst['available'], st.f_frsize * st.f_bfree)
@@ -278,11 +279,11 @@ class TestFSUtil(unittest.TestCase):
 
         ths = []
         th = threadutil.start_daemon_thread(_write_wait,
-                        args=(cont_thread1, cont_thread2, 0, False))
+                                            args=(cont_thread1, cont_thread2, 0, False))
         ths.append(th)
 
         th = threadutil.start_daemon_thread(_write_wait,
-                        args=(cont_thread2, cont_thread2, 1.5, False))
+                                            args=(cont_thread2, cont_thread2, 1.5, False))
         ths.append(th)
 
         for th in ths:
@@ -299,11 +300,11 @@ class TestFSUtil(unittest.TestCase):
 
         ths = []
         th = threadutil.start_daemon_thread(_write_wait,
-                        args=(cont_thread1, cont_thread1, 0, True))
+                                            args=(cont_thread1, cont_thread1, 0, True))
         ths.append(th)
 
         th = threadutil.start_daemon_thread(_write_wait,
-                        args=(cont_thread2, cont_thread2, 1.5, True))
+                                            args=(cont_thread2, cont_thread2, 1.5, True))
         ths.append(th)
 
         for th in ths:
@@ -313,6 +314,122 @@ class TestFSUtil(unittest.TestCase):
         os.fsync = os_fsync
         force_remove(fn)
 
+    def test_remove_normal_file(self):
+
+        fn = '/tmp/pykit-ut-fsutil-remove-file-normal'
+        force_remove(fn)
+
+        fsutil.write_file(fn, '', atomic=True)
+        self.assertTrue(os.path.isfile(fn))
+
+        fsutil.remove(fn)
+        self.assertFalse(os.path.exists(fn))
+
+    def test_remove_link_file(self):
+
+        src_fn = '/tmp/pykit-ut-fsutil-remove-file-normal'
+        force_remove(src_fn)
+
+        fsutil.write_file(src_fn, '', atomic=True)
+        self.assertTrue(os.path.isfile(src_fn))
+
+        link_fn = '/tmp/pykit-ut-fsutil-remove-file-link'
+        force_remove(link_fn)
+
+        os.link(src_fn, link_fn)
+        self.assertTrue(os.path.isfile(link_fn))
+
+        fsutil.remove(link_fn)
+        self.assertFalse(os.path.exists(link_fn))
+
+        symlink_fn = '/tmp/pykit-ut-fsutil-remove-file-symlink'
+        force_remove(symlink_fn)
+
+        os.symlink(src_fn, symlink_fn)
+        self.assertTrue(os.path.islink(symlink_fn))
+
+        fsutil.remove(symlink_fn)
+        self.assertFalse(os.path.exists(symlink_fn))
+
+        force_remove(src_fn)
+
+    def test_remove_dir(self):
+
+        dirname = '/tmp/pykit-ut-fsutil-remove-dir'
+
+        fsutil.makedirs(dirname)
+        self.assertTrue(os.path.isdir(dirname))
+
+        for is_dir, file_path in (
+                (False, ('normal_file',)),
+                (True,  ('sub_dir',)),
+                (False, ('sub_dir', 'sub_file1')),
+                (False, ('sub_dir', 'sub_file2')),
+                (True,  ('sub_empty_dir',)),
+                (True,  ('sub_dir', 'sub_sub_dir')),
+                (False, ('sub_dir', 'sub_sub_dir', 'sub_sub_file')),
+        ):
+
+            path = os.path.join(dirname, *file_path)
+
+            if is_dir:
+                fsutil.makedirs(path)
+                self.assertTrue(os.path.isdir(path))
+            else:
+                fsutil.write_file(path, '')
+                self.assertTrue(os.path.isfile(path))
+
+        fsutil.remove(dirname)
+        self.assertFalse(os.path.exists(dirname))
+
+    def test_remove_dir_with_link(self):
+
+        dirname = '/tmp/pykit-ut-fsutil-remove-dir'
+
+        fsutil.makedirs(dirname)
+        self.assertTrue(os.path.isdir(dirname))
+
+        normal_file = 'normal_file'
+        normal_path = os.path.join(dirname, normal_file)
+
+        fsutil.write_file(normal_path, '')
+        self.assertTrue(os.path.isfile(normal_path))
+
+        hard_link = 'hard_link'
+        hard_path = os.path.join(dirname, hard_link)
+
+        os.link(normal_path, hard_path)
+        self.assertTrue(os.path.isfile(hard_path))
+
+        symbolic_link = 'symbolic_link'
+        symbolic_path = os.path.join(dirname, symbolic_link)
+
+        os.symlink(hard_path, symbolic_path)
+        self.assertTrue(os.path.islink(symbolic_path))
+
+        fsutil.remove(dirname)
+        self.assertFalse(os.path.exists(dirname))
+
+    def test_remove_error(self):
+
+        dirname = '/tmp/pykit-ut-fsutil-remove-on-error'
+        if os.path.isdir(dirname):
+            fsutil.remove(dirname)
+
+        # OSError
+        self.assertRaises(os.error, fsutil.remove, dirname, False)
+
+        # ignore errors
+        fsutil.remove(dirname, ignore_errors=True)
+
+        def assert_error(exp_func):
+            def onerror(func, path, exc_info):
+                self.assertEqual(func, exp_func)
+            return onerror
+
+        # on error
+        fsutil.remove(dirname, onerror=assert_error(os.remove))
+
     def test_calc_checksums(self):
 
         M = 1024**2
@@ -321,143 +438,143 @@ class TestFSUtil(unittest.TestCase):
         force_remove(fn)
 
         cases = (
-            (   '',
+            ('',
                 {
-                    'sha1'      : True,
-                    'md5'       : True,
-                    'crc32'     : True,
+                    'sha1':       True,
+                    'md5':        True,
+                    'crc32':      True,
                     'block_size': M,
-                    'io_limit'  : M,
+                    'io_limit':   M,
                 },
                 {
-                    'sha1'      : 'da39a3ee5e6b4b0d3255bfef95601890afd80709',
-                    'md5'       : 'd41d8cd98f00b204e9800998ecf8427e',
-                    'crc32'     : '00000000',
-                },
-                None,
-            ),
-
-            (   '',
-                {
-                    'md5'       : True,
-                    'crc32'     : True,
-                },
-                {
-                    'sha1'      : None,
-                    'md5'       : 'd41d8cd98f00b204e9800998ecf8427e',
-                    'crc32'     : '00000000',
+                    'sha1':       'da39a3ee5e6b4b0d3255bfef95601890afd80709',
+                    'md5':        'd41d8cd98f00b204e9800998ecf8427e',
+                    'crc32':      '00000000',
                 },
                 None,
-            ),
+             ),
 
-            (   '',
+            ('',
                 {
+                    'md5':        True,
+                    'crc32':      True,
                 },
                 {
-                    'sha1'      : None,
-                    'md5'       : None,
-                    'crc32'     : None,
+                    'sha1':       None,
+                    'md5':        'd41d8cd98f00b204e9800998ecf8427e',
+                    'crc32':      '00000000',
                 },
                 None,
-            ),
+             ),
 
-            (   'It  바로 とても 氣!',
+            ('',
                 {
-                    'sha1'      : True,
-                    'md5'       : True,
-                    'crc32'     : True,
+                },
+                {
+                    'sha1':       None,
+                    'md5':        None,
+                    'crc32':      None,
+                },
+                None,
+             ),
+
+            ('It  바로 とても 氣!',
+                {
+                    'sha1':       True,
+                    'md5':        True,
+                    'crc32':      True,
                     'block_size': M,
-                    'io_limit'  : M,
+                    'io_limit':   M,
                 },
                 {
-                    'sha1'      : 'e22fa5446cb33d0c32221d89ee270dff23e32847',
-                    'md5'       : '9d245fca88360be492c715253d68ba6f',
-                    'crc32'     : '7c3becdb',
+                    'sha1':       'e22fa5446cb33d0c32221d89ee270dff23e32847',
+                    'md5':        '9d245fca88360be492c715253d68ba6f',
+                    'crc32':      '7c3becdb',
                 },
                 None,
-            ),
+             ),
 
-            (   'It  바로 とても 氣!',
+            ('It  바로 とても 氣!',
                 {
-                    'sha1'      : False,
-                    'md5'       : True,
-                    'crc32'     : True,
+                    'sha1':       False,
+                    'md5':        True,
+                    'crc32':      True,
                     'block_size': M,
-                    'io_limit'  : M,
+                    'io_limit':   M,
                 },
                 {
-                    'sha1'      : None,
-                    'md5'       : '9d245fca88360be492c715253d68ba6f',
-                    'crc32'     : '7c3becdb',
-                },
-                None,
-            ),
-
-            (   'It  바로 とても 氣!',
-                {
-                    'sha1'      : True,
-                    'md5'       : False,
-                    'crc32'     : False,
-                },
-                {
-                    'sha1'      : 'e22fa5446cb33d0c32221d89ee270dff23e32847',
-                    'md5'       : None,
-                    'crc32'     : None,
+                    'sha1':       None,
+                    'md5':        '9d245fca88360be492c715253d68ba6f',
+                    'crc32':      '7c3becdb',
                 },
                 None,
-            ),
+             ),
 
-            (   '!' * M * 10,
+            ('It  바로 とても 氣!',
                 {
-                    'sha1'      : False,
-                    'md5'       : False,
-                    'crc32'     : False,
+                    'sha1':       True,
+                    'md5':        False,
+                    'crc32':      False,
+                },
+                {
+                    'sha1':       'e22fa5446cb33d0c32221d89ee270dff23e32847',
+                    'md5':        None,
+                    'crc32':      None,
+                },
+                None,
+             ),
+
+            ('!' * M * 10,
+                {
+                    'sha1':       False,
+                    'md5':        False,
+                    'crc32':      False,
                     'block_size': M,
-                    'io_limit'  : M,
+                    'io_limit':   M,
                 },
                 {
-                    'sha1'      : None,
-                    'md5'       : None,
-                    'crc32'     : None,
+                    'sha1':       None,
+                    'md5':        None,
+                    'crc32':      None,
                 },
                 (0, 0.5),
-            ),
+             ),
 
-            (   '!' * M * 10,
+            ('!' * M * 10,
                 {
-                    'sha1'      : True,
-                    'md5'       : True,
-                    'crc32'     : True,
-                    'block_size': M*10,
-                    'io_limit'  : M*10,
+                    'sha1':       True,
+                    'md5':        True,
+                    'crc32':      True,
+                    'block_size': M * 10,
+                    'io_limit':   M * 10,
                 },
                 {
-                    'sha1'      : 'c5430d624c498024d0f3371670227a201e910054',
-                    'md5'       : '8f499b17375fc678c7256f3c0054db79',
-                    'crc32'     : 'f0af209f',
+                    'sha1':       'c5430d624c498024d0f3371670227a201e910054',
+                    'md5':        '8f499b17375fc678c7256f3c0054db79',
+                    'crc32':      'f0af209f',
                 },
                 (1, 1.5),
-            ),
+             ),
 
-            (   '!' * M * 10,
+            ('!' * M * 10,
                 {
-                    'sha1'      : True,
+                    'sha1':       True,
                     'block_size': M,
-                    'io_limit'  : M*5,
+                    'io_limit':   M * 5,
                 },
                 None,
                 (2, 2.5),
-            ),
+             ),
 
-            (   '!' * M * 10,
+            ('!' * M * 10,
                 {
-                    'sha1'      : True,
+                    'sha1':       True,
                     'block_size': M,
-                    'io_limit'  : -1,
+                    'io_limit': -1,
                 },
                 None,
                 (0, 0.5),
-            ),
+             ),
         )
 
         for cont, args, exp_checksums, min_time in cases:
@@ -472,15 +589,16 @@ class TestFSUtil(unittest.TestCase):
             if exp_checksums is not None:
                 for k in checksums:
                     self.assertEqual(exp_checksums[k], checksums[k],
-                            'except: {exp}, actuality: {act}'.format(
-                                exp=exp_checksums[k],
-                                act=checksums[k],
-                            ))
+                                     'except: {exp}, actuality: {act}'.format(
+                        exp=exp_checksums[k],
+                        act=checksums[k],
+                    ))
 
             if min_time is not None:
                 self.assertTrue(min_time[0] < spend_time < min_time[1])
 
         force_remove(fn)
+
 
 def force_remove(fn):
 
