@@ -123,6 +123,13 @@ Similar to `watch-all.sh` but it display replication status for one port.
 ## Check replication progress on every mysql instance:
 
 ```
-./do-all.sh 'select @@port; show master status\G' | grep -v "Pos\|File\|Binlog_Do_DB\|Binlog_Ig"
-./do-all.sh 'show slave status\G' | grep 'Port\|Executed\|^[^ ]'
+./do-all.sh 'select @@port; show master status\G' | grep -v "Pos\|File\|Binlog_Do_DB\|Binlog_Ig\|^\*\*" | awk '/:/{print "    "$NF} !/:/{print $NF}'
+
+# 5202
+#     133ce91b-46bf-11e7-a847-a0369fb4eb08:1-2,
+#     1888d423-46bf-11e7-821e-a0369fabbdf0:1-11
+# 5302
+#     1745d7fc-46bf-11e7-86b9-a0369fb4eb08:1-2,
+#     1b13a2f0-46bf-11e7-a894-a0369fabbdf0:1-11
 ```
+
