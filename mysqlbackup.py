@@ -695,16 +695,6 @@ class MysqlBackup(object):
         logger.debug(self.bkp_conf['mes'] + ': ' + s)
 
 
-def mysql_query(conn, sql):
-
-    cur = conn.cursor(MySQLdb.cursors.DictCursor)
-    cur.execute(sql)
-    rst = cur.fetchall()
-    cur.close()
-
-    return rst
-
-
 def _shell_run(cmd, cwd=None):
 
     proc = subprocess.Popen(cmd,
