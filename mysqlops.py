@@ -24,7 +24,7 @@ if __name__ == "__main__":
     parser.add_argument('--conf-base', type=str, required=True,  help='base path to config file')
     parser.add_argument('--jobs',      type=int, required=False, default=1, help='nr of threads to run')
     parser.add_argument('--cmd',       type=str, required=True,  choices=['backup', 'restore', 'catchup_binlog', 'setup_replication'], help='command to run')
-    parser.add_argument('--ports',     type=int, required=True,  nargs='+', help='ports to backup')
+    parser.add_argument('--ports',     type=int, required=True,  nargs='+', help='ports to run "cmd" on')
 
     args = parser.parse_args()
     print args
