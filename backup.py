@@ -26,14 +26,15 @@ if __name__ == "__main__":
 
     for port in ports:
 
+        conf_path = '{conf_base}/{port}/backup_conf.yaml'.format(
+                conf_base=conf_base, port=port)
+
+        conf = mysqlbackup.load_conf_from_file(conf_path)
+        conf.setdefault('date_str', date_str)
+
+        mb = mysqlbackup.MysqlBackup(conf)
+
         try:
-            conf_path = '{conf_base}/{port}/backup_conf.yaml'.format(
-                    conf_base=conf_base, port=port)
-
-            conf = mysqlbackup.load_conf_from_file(conf_path)
-            conf.setdefault('date_str', date_str)
-
-            mb = mysqlbackup.MysqlBackup(conf)
             mb.backup()
         except mysqlbackup.MysqlBackupError as e:
             logger.exception(repr(e))
