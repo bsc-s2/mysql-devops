@@ -55,7 +55,20 @@ class MysqlBackup(object):
 
         self.mysql_conn_pool = mysqlconnpool.make(self.mysql_addr)
 
-    def setup_replication(self, source_list):
+    def setup_replication(self):
+
+        # replication:
+        #     user:       "{{ mysql_master_user }}"
+        #     password:   "{{ mysql_master_password }}"
+        #     source:
+        #       - host:
+        #         port:
+        #         id:
+        #       - host:
+        #         port:
+        #         id:
+
+        rpl = self.bkp_conf['replication']
 
         alive = self.is_instance_alive()
         proc = None
@@ -76,8 +89,11 @@ class MysqlBackup(object):
         try:
             for sql in sqls_reset:
                 self.mysql_query(sql)
+                time.sleep(0.5)
 
-            for src in source_list:
+            for src in rpl['source']:
+                kwarg = copy.deepcopy(rpl)
+                kwarg.update(src)
                 sql = (
                     'CHANGE MASTER TO'
                     '      MASTER_HOST="{host}"'
@@ -85,8 +101,8 @@ class MysqlBackup(object):
                     '    , MASTER_USER="{user}"'
                     '    , MASTER_PASSWORD="{password}"'
                     '    , MASTER_AUTO_POSITION=1'
-                    ' FOR CHANNEL "{channel}"'
-                ).format(**src)
+                    ' FOR CHANNEL "master-{id}"'
+                ).format(**kwarg)
 
                 self.mysql_query(sql)
 
@@ -885,7 +901,7 @@ def load_cli_args():
 
     parser.add_argument('--clean-after-restore', action='store_true', help='clean backup files after restore')
 
-    parser.add_argument('cmd', type=str, nargs=1, choices=['backup', 'restore', 'catchup_binlog'], help='command to run')
+    parser.add_argument('cmd', type=str, nargs=1, choices=['backup', 'restore', 'catchup_binlog', 'setup_replication'], help='command to run')
     parser.add_argument('--when', action='store', choices=['no-data-dir', 'stopped'], help='condition that must be satisfied before a command runs')
 
     args = parser.parse_args()
@@ -982,7 +998,7 @@ def main():
 
     # run command
 
-    cmd = (args.cmd + [''])[0]
+    cmd = args.cmd[0]
 
     try:
         if cmd == 'backup':
@@ -994,6 +1010,9 @@ def main():
         elif cmd == 'catchup_binlog':
             mb.assert_instance_is_down()
             mb.apply_remote_binlog()
+
+        elif cmd == 'setup_replication':
+            mb.setup_replication()
 
         else:
             raise ValueError('invalid command: ' + str(cmd))
