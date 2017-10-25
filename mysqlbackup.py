@@ -28,6 +28,7 @@ from botocore.client import Config
 
 from pykit import mysqlconnpool
 from pykit import mysqlutil
+from pykit import logutil
 
 logger = logging.getLogger(__name__)
 
@@ -857,27 +858,6 @@ def boto_get(cli, fpath, bucket_name, key_name):
     return obj
 
 
-def init_logger(fn=None, lvl=logging.DEBUG):
-
-    # At first init stdout logging level to INFO to reduce useless debug info.
-    # If -v(DEBUG) specified, change stdout debug level to DEBUG.
-
-    logging.basicConfig(stream=sys.stdout, level=logging.WARNING)
-
-    logger.setLevel(lvl)
-
-    file_path = os.path.join('/tmp/{n}.out'.format(n=fn or 'mysqlbackup'))
-    handler = logging.handlers.WatchedFileHandler(file_path)
-
-    _formatter = logging.Formatter(
-        "[%(asctime)s,%(process)d-%(thread)d,%(filename)s,%(lineno)d,%(levelname)s] %(message)s")
-
-    handler.setFormatter(_formatter)
-
-    logger.handlers = []
-    logger.addHandler(handler)
-
-
 def load_cli_args():
 
     parser = argparse.ArgumentParser(description='mysql backup-restore tool')
@@ -963,7 +943,11 @@ def load_conf(args):
 
 def main():
 
-    init_logger()
+    # config root logger
+    logging.basicConfig(stream=sys.stdout, level=logging.WARNING)
+
+    # config logger for this module
+    logutil.make_logger(base_dir='/tmp', log_name=__name__, level=logging.DEBUG)
 
     args = load_cli_args()
     conf = load_conf(args)
