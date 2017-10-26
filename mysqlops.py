@@ -61,7 +61,7 @@ if __name__ == "__main__":
     jm = jobq.JobManager([(worker, args.jobs)])
 
     for port in args.ports:
-        jm.push(port)
+        jm.put(port)
 
     jm.join()
 
