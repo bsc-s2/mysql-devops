@@ -88,8 +88,9 @@ class MysqlBackup(object):
         ]
 
         try:
+            pool = mysqlconnpool.make(self.mysql_addr)
             for sql in sqls_reset:
-                self.mysql_query(sql)
+                self.mysql_pool_query(pool, sql)
                 time.sleep(0.5)
 
             for src in rpl['source']:
@@ -105,10 +106,10 @@ class MysqlBackup(object):
                     ' FOR CHANNEL "master-{id}"'
                 ).format(**kwarg)
 
-                self.mysql_query(sql)
+                self.mysql_pool_query(pool, sql)
 
             if alive:
-                self.mysql_query('START SLAVE')
+                self.mysql_pool_query(pool, 'START SLAVE')
 
         finally:
             if not alive:
