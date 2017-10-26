@@ -27,8 +27,7 @@ if __name__ == "__main__":
     parser.add_argument('--ports',     type=int, required=True,  nargs='+', help='ports to run "cmd" on')
 
     args = parser.parse_args()
-    print args
-    raise
+    logger.info('command:' + str(args))
 
     cmd = args.cmd[0]
     date_str = mysqlbackup.backup_date_str()
