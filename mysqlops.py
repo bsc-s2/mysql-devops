@@ -70,7 +70,11 @@ if __name__ == "__main__":
         elif cmd == 'setup_replication':
             mb.setup_replication()
         elif cmd == 'restore_from_backup':
-            mb.restore_from_backup()
+            if mb.has_data_dir():
+                logger.info('data-dir presents, skip restore_from_backup')
+                pass
+            else:
+                mb.restore_from_backup()
         elif cmd == 'catchup':
             mb.catchup()
         else:
