@@ -14,13 +14,11 @@ logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
 
-    # config root logger
-    logging.basicConfig(stream=sys.stdout, level=logging.WARNING)
-    # config logger for this module
-    logutil.make_logger(base_dir='/tmp',
-                        log_name=__name__,
-                        log_fn=logutil.get_root_log_fn(),
-                        level=logging.DEBUG)
+    rootlogger = logutil.make_logger(base_dir='/tmp',
+                                     log_fn=logutil.get_root_log_fn(),
+                                     level=logging.DEBUG)
+    logutil.add_std_handler(rootlogger, stream=sys.stdout)
+    rootlogger.handlers[1].setLevel(logging.DEBUG)
 
     parser = argparse.ArgumentParser(description='run commands for one or more ports concurrenty')
 
