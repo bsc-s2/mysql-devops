@@ -29,7 +29,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     logger.info('command:' + str(args))
 
-    cmd = args.cmd[0]
+    cmd = args.cmd
     date_str = mysqlbackup.backup_date_str()
     rsts = {}
 
