@@ -13,9 +13,9 @@ while ``; do
     for fn in $(ls /var/run/mysqld/*.sock); do
         port=${fn%.sock}
         port=${port#*-}
-        clear
         if [ "$interactive" = "1" ]; then
             while ``; do
+                clear
                 ./watch-slave.sh $port -
                 echo "<< press space to continue, press r to refresh >>.........."
                 read -n 1 c
@@ -26,6 +26,7 @@ while ``; do
                 fi
             done
         else
+            clear
             ./watch-slave.sh $port -
             sleep 0.3
         fi
