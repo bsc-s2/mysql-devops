@@ -246,7 +246,7 @@ class MysqlBackup(object):
         if not self.has_data_dir():
             self.restore_from_backup()
         else:
-            logger.info_r('{mysql_data_dir} exists, skip download/restore step')
+            self.info_r('{mysql_data_dir} exists, skip download/restore step')
 
         self.catchup()
         self.info("restore OK")
@@ -255,7 +255,7 @@ class MysqlBackup(object):
         self.copy_backup_my_cnf()
 
         if self.is_instance_alive():
-            logger.info_r('{port} is active, skip applying remote binlog')
+            self.info_r('{port} is active, skip applying remote binlog')
         else:
             self.apply_remote_binlog()
 
