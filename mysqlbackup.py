@@ -461,22 +461,25 @@ class MysqlBackup(object):
 
         while True:
 
-            # TODO wait all master to be synced
             rsts = self.mysql_query('show slave status')
             if len(rsts) == 0:
                 raise MysqlRestoreError('no slave status found!')
 
             all_done = True
+            sleeps = []
             for rst in rsts:
 
                 state = self.check_slave_status(rst)
                 if state != 'done':
                     all_done = False
 
+                sleep_time = int(rst['Seconds_Behind_Master']) / 5
+                sleeps.append(sleep_time)
+
             if all_done:
                 break
 
-            sleep_time = int(rst['Seconds_Behind_Master']) / 5
+            sleep_time = max(sleeps)
 
             if sleep_time > 60 * 5:
                 sleep_time = 60 * 5
