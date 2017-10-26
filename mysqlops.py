@@ -26,6 +26,8 @@ if __name__ == "__main__":
     parser.add_argument('--cmd',       type=str, required=True,  choices=['backup', 'restore', 'catchup_binlog', 'setup_replication'], help='command to run')
     parser.add_argument('--ports',     type=int, required=True,  nargs='+', help='ports to run "cmd" on')
 
+    parser.add_argument('--clean-after-restore', action='store_true', help='clean backup files after restore')
+
     args = parser.parse_args()
     logger.info('command:' + str(args))
 
@@ -48,6 +50,7 @@ if __name__ == "__main__":
 
         conf = mysqlbackup.load_conf_from_file(conf_path)
         conf.setdefault('date_str', date_str)
+        conf.setdefault('clean_after_restore', args.clean_after_restore)
 
         mb = mysqlbackup.MysqlBackup(conf)
 
@@ -55,6 +58,10 @@ if __name__ == "__main__":
             mb.backup()
         elif cmd == 'setup_replication':
             mb.setup_replication()
+        elif cmd == 'restore_from_backup':
+            mb.restore_from_backup()
+        elif cmd == 'catchup':
+            mb.catchup()
         else:
             raise ValueError('unsupported command: ' + repr(cmd))
 

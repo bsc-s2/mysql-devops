@@ -241,10 +241,23 @@ class MysqlBackup(object):
 
         self.info('restore ...')
 
-        self.restore_from_backup()
-        self.apply_remote_binlog()
+        self.assert_instance_is_down()
 
+        if not self.has_data_dir():
+            self.restore_from_backup()
+        else:
+            logger.info_r('{mysql_data_dir} exists, skip download/restore step')
+
+        self.catchup()
         self.info("restore OK")
+
+    def catchup(self):
+        self.copy_backup_my_cnf()
+
+        if self.is_instance_alive():
+            logger.info_r('{port} is active, skip applying remote binlog')
+        else:
+            self.apply_remote_binlog()
 
     def restore_from_backup(self):
 
@@ -429,7 +442,7 @@ class MysqlBackup(object):
 
         proc = self.start_tmp_mysql(['--server-id={tmp_server_id}'])
 
-        self.mysql_query('start slave')
+        self.setup_replication()
 
         # wait for binlog-sync to start
         time.sleep(1)
@@ -611,6 +624,16 @@ class MysqlBackup(object):
             logger.info('backup conf: {k:<20} : {v}'.format(k=k, v=v))
 
         return bkp_conf
+
+    def has_data_dir(self):
+        return os.path.exists(self.render("{mysql_data_dir}"))
+
+    def copy_backup_my_cnf(self):
+        self.shell_run('copy {conf_base}/my.cnf to {mysql_data_dir}/',
+                       ("cp"
+                        " {conf_base}/my.cnf"
+                        " {mysql_data_dir}/")
+        )
 
     def list_binlog_fns(self):
 
