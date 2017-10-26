@@ -26,6 +26,7 @@ if __name__ == "__main__":
     parser.add_argument('--cmd',       type=str, required=True,  choices=['backup', 'restore', 'catchup_binlog', 'setup_replication'], help='command to run')
     parser.add_argument('--ports',     type=int, required=True,  nargs='+', help='ports to run "cmd" on')
 
+    parser.add_argument('--date-str',            action='store', help='date in form 2017_01_01. It is used in backup file name, or to specify which backup to use for restore. when absent, use date of today')
     parser.add_argument('--clean-after-restore', action='store_true', help='clean backup files after restore')
 
     args = parser.parse_args()
@@ -34,6 +35,10 @@ if __name__ == "__main__":
     cmd = args.cmd
     date_str = mysqlbackup.backup_date_str()
     rsts = {}
+
+    def setdef(dic, key, v):
+        if v is not None:
+            dic[key] = v
 
     def worker(port):
 
@@ -49,8 +54,11 @@ if __name__ == "__main__":
                 conf_base=args.conf_base, port=port)
 
         conf = mysqlbackup.load_conf_from_file(conf_path)
+
+        setdef(conf, 'date_str', args.date_str)
+        setdef(conf, 'clean_after_restore', args.clean_after_restore)
+
         conf.setdefault('date_str', date_str)
-        conf.setdefault('clean_after_restore', args.clean_after_restore)
 
         mb = mysqlbackup.MysqlBackup(conf)
 
