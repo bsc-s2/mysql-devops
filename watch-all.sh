@@ -14,11 +14,19 @@ while ``; do
         port=${fn%.sock}
         port=${port#*-}
         clear
-        ./watch-slave.sh $port -
         if [ "$interactive" = "1" ]; then
-            echo "<<press space to continue>>.........."
-            read -n 1 c
+            while ``; do
+                ./watch-slave.sh $port -
+                echo "<< press space to continue, press r to refresh >>.........."
+                read -n 1 c
+                if [ "$c" = "r" ]; then
+                    :
+                else
+                    break
+                fi
+            done
         else
+            ./watch-slave.sh $port -
             sleep 0.3
         fi
 
