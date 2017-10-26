@@ -970,7 +970,7 @@ def main():
     logging.basicConfig(stream=sys.stdout, level=logging.WARNING)
 
     # config logger for this module
-    logutil.make_logger(base_dir='/tmp', log_name=__name__, level=logging.DEBUG)
+    logutil.make_logger(base_dir='/tmp', level=logging.DEBUG)
 
     args = load_cli_args()
     conf = load_conf(args)

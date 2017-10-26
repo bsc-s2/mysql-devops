@@ -17,7 +17,7 @@ if __name__ == "__main__":
     # config root logger
     logging.basicConfig(stream=sys.stdout, level=logging.WARNING)
     # config logger for this module
-    logutil.make_logger(base_dir='/tmp', log_name=__name__, level=logging.DEBUG)
+    logutil.make_logger(base_dir='/tmp', level=logging.DEBUG)
 
     parser = argparse.ArgumentParser(description='run commands for one or more ports concurrenty')
 
