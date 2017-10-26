@@ -462,42 +462,19 @@ class MysqlBackup(object):
         while True:
 
             # TODO wait all master to be synced
-            rst = self.mysql_query('show slave status')
-            rst = rst[0]
+            rsts = self.mysql_query('show slave status')
+            if len(rsts) == 0:
+                raise MysqlRestoreError('no slave status found!')
 
-            if rst['Last_IO_Error'] != '' or rst['Last_SQL_Error'] != '':
-                raise MysqlRestoreError(
-                    rst['Last_IO_Error'] + ' ' + rst['Last_SQL_Error'])
+            all_done = True
+            for rst in rsts:
 
-            if rst['Slave_IO_Running'] != 'Yes' or rst['Slave_SQL_Running'] != 'Yes':
-                raise MysqlRestoreError('IO/SQL not running')
+                state = self.check_slave_status(rst)
+                if state != 'done':
+                    all_done = False
 
-            if rst['Slave_IO_State'] == 'Waiting for master to send event':
-
-                rcv = mysqlutil.gtidset.load(rst["Retrieved_Gtid_Set"])
-                exc = mysqlutil.gtidset.load(rst["Executed_Gtid_Set"])
-
-                diff = mysqlutil.gtidset.compare(exc, rcv)
-
-                self.debug('applying remote binlog:'
-                           ' io_state: {Slave_IO_State}'
-                           ' recv: {rcv}'
-                           ' exec: {exc}'.format(rcv=rcv, exc=exc, **rst))
-
-                self.debug('applying remote binlog:'
-                           ' recv but not exec: "{diff}"'.format(diff=diff['onlyright'],))
-
-                # - lagging seconds is small
-                # - received but not unexecuted events are little(mysql running on 1000 tps is normal).
-                # - only one actively changing uuid(mysql instance), the only one
-                #   serving user requests.
-                if (int(rst['Seconds_Behind_Master']) < 1
-                    and diff['onlyright']['length'] < 1000
-                        and len(diff['onlyright']['gtidset']) <= 1):
-                    # there could be events on remote created in less than 1
-                    # second
-                    time.sleep(1)
-                    break
+            if all_done:
+                break
 
             sleep_time = int(rst['Seconds_Behind_Master']) / 5
 
@@ -508,6 +485,50 @@ class MysqlBackup(object):
                 sleep_time = 30
 
             time.sleep(sleep_time)
+
+    def check_slave_status(self, rst):
+
+        ctx = '{Master_Host}:{Master_Port}'.format(**rst)
+
+        if rst['Last_IO_Error'] != '' or rst['Last_SQL_Error'] != '':
+            raise MysqlRestoreError(
+                rst['Last_IO_Error'] + ' ' + rst['Last_SQL_Error'])
+
+        if rst['Slave_IO_Running'] != 'Yes' or rst['Slave_SQL_Running'] != 'Yes':
+            raise MysqlRestoreError('IO/SQL not running')
+
+        if rst['Slave_IO_State'] != 'Waiting for master to send event':
+            return 'wait'
+
+        rcv = mysqlutil.gtidset.load(rst["Retrieved_Gtid_Set"])
+        exc = mysqlutil.gtidset.load(rst["Executed_Gtid_Set"])
+
+        diff = mysqlutil.gtidset.compare(exc, rcv)
+
+        self.debug('applying remote binlog {ctx}:'
+                   ' io_state: {Slave_IO_State}'
+                   ' recv: {rcv}'
+                   ' exec: {exc}'.format(ctx=ctx, rcv=rcv, exc=exc, **rst))
+
+        self.debug('applying remote binlog {ctx}:'
+                   ' recv but not exec: "{diff}"'.format(ctx=ctx, diff=diff['onlyright'],))
+
+        # - lagging seconds is small
+        # - received but not unexecuted events are little(mysql running on 1000 tps is normal).
+        # - only one actively changing uuid(mysql instance), the only one
+        #   serving user requests.
+        if (int(rst['Seconds_Behind_Master']) < 1
+            and diff['onlyright']['length'] < 1000
+                and len(diff['onlyright']['gtidset']) <= 1):
+
+            self.debug('applying remote binlog {ctx}: done'.format(ctx=ctx))
+
+            # there could be events on remote created in less than 1
+            # second
+            time.sleep(1)
+            return 'done'
+
+        return 'wait'
 
     def start_tmp_mysql(self, opts=()):
 
