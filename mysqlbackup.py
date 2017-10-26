@@ -500,9 +500,6 @@ class MysqlBackup(object):
         if rst['Slave_IO_Running'] != 'Yes' or rst['Slave_SQL_Running'] != 'Yes':
             raise MysqlRestoreError('IO/SQL not running')
 
-        if rst['Slave_IO_State'] != 'Waiting for master to send event':
-            return 'wait'
-
         rcv = mysqlutil.gtidset.load(rst["Retrieved_Gtid_Set"])
         exc = mysqlutil.gtidset.load(rst["Executed_Gtid_Set"])
 
@@ -515,6 +512,9 @@ class MysqlBackup(object):
 
         self.debug('applying remote binlog {ctx}:'
                    ' recv but not exec: "{diff}"'.format(ctx=ctx, diff=diff['onlyright'],))
+
+        if rst['Slave_IO_State'] != 'Waiting for master to send event':
+            return 'wait'
 
         # - lagging seconds is small
         # - received but not unexecuted events are little(mysql running on 1000 tps is normal).
