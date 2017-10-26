@@ -252,12 +252,15 @@ class MysqlBackup(object):
         self.info("restore OK")
 
     def catchup(self):
+        self.info_r('catchup start...')
         self.copy_backup_my_cnf()
 
         if self.is_instance_alive():
             self.info_r('{port} is active, skip applying remote binlog')
         else:
             self.apply_remote_binlog()
+
+        self.info_r('catchup end')
 
     def restore_from_backup(self):
 
