@@ -99,17 +99,22 @@ if __name__ == "__main__":
 
             if args.human:
                 hm = []
-                for k, diff in rst:
+                for k, diff in rst.items():
                     for side in ('onlyleft', 'onlyright'):
+                        if side not in diff:
+                            continue
                         d = diff[side]
-                        line = '{k:>20}: {side:>10}: {length:>10}: {rs}'.format(
+                        line = '{k:>24}: {side:>10}: {length:>10}: {rs}'.format(
                                 k=k,
                                 side=side,
                                 length=d['length'],
                                 rs=str(d['gtidset']))
                         hm.append(line)
 
-                rst = hm
+                def _out():
+                    for line in hm:
+                        print line
+                rst = _out
             return rst
         else:
             raise ValueError('unsupported command: ' + repr(cmd))
@@ -117,7 +122,10 @@ if __name__ == "__main__":
         return jobq.EmptyRst
 
     def output(rst):
-        print json.dumps(rst, indent=2)
+        if callable(rst):
+            rst()
+        else:
+            print json.dumps(rst, indent=2)
 
     jm = jobq.JobManager([(worker, args.jobs),
                           (output, 1)])
