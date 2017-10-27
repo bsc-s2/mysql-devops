@@ -29,6 +29,7 @@ if __name__ == "__main__":
     parser.add_argument('--cmd',       type=str, required=True,  choices=['backup', 'restore_from_backup', 'catchup', 'setup_replication', 'replication_diff'], help='command to run')
     parser.add_argument('--ports',     type=int, required=False,  nargs='+', help='ports to run "cmd" on')
     parser.add_argument('--human',     action='store_true', required=False,  help='print result for human')
+    parser.add_argument('--full',      action='store_true', required=False,  help='do not reduce any info when display')
 
     parser.add_argument('--date-str',            action='store', help='date in form 2017_01_01. It is used in backup file name, or to specify which backup to use for restore. when absent, use date of today')
     parser.add_argument('--clean-after-restore', action='store_true', help='clean backup files after restore')
