@@ -133,3 +133,81 @@ Similar to `watch-all.sh` but it display replication status for one port.
 #     1b13a2f0-46bf-11e7-a894-a0369fabbdf0:1-11
 ```
 
+## Display replication diff from other replication source.
+
+```sh
+python2 mysqlops.py --human --conf-base /s2/mysql/backup_conf --cmd replication_diff
+
+#   10.104.0.18:3402-[3]:  IDontHave:          4: {'e90a6f39-a80c-11e6-9cb8-a0369fb4eb00': [[568116547, 568116550]]}
+#  192.168.8.19:3403-[1]:  IDontHave:          1: {'f4ebb415-a801-11e6-9079-a0369fb4eb00': [[2453681515, 2453681515]]}
+#   10.104.0.18:3403-[3]:  IDontHave:         70: {'f4ebb415-a801-11e6-9079-a0369fb4eb00': [[2453681515, 2453681584]]}
+#   10.104.0.18:3404-[3]:  IDontHave:          5: {'1f975092-a813-11e6-a042-a0369fb4eb00': [[567346128, 567346132]]}
+#   10.104.0.18:3405-[3]:  IDontHave:          5: {'a7d3758d-a884-11e6-b316-a0369fb4eb00': [[1517445278, 1517445282]]}
+#  192.168.8.19:3501-[1]:  IDontHave:          1: {'1c685bd4-b80b-11e7-b686-a0369fb4eb00': [[32102044, 32102044]]}
+#   10.104.0.18:3501-[3]:  IDontHave:         44: {'1c685bd4-b80b-11e7-b686-a0369fb4eb00': [[32102044, 32102087]]}
+#   10.104.0.18:3503-[3]:  IDontHave:          3: {'44722efe-a889-11e6-98df-a0369fb4eb00': [[1342034374, 1342034376]]}
+#   10.104.0.18:3505-[3]:  IDontHave:         10: {'3e2a6047-a891-11e6-9fa0-a0369fb4eb00': [[341717052, 341717061]]}
+#   10.104.0.18:3508-[3]:  IDontHave:          4: {'9dd98013-a885-11e6-9c9d-a0369fb4eb00': [[3666711890, 3666711893]]}
+
+```
+
+Other options
+
+```
+# concurrently 8 jobs, makes it faster
+python2 mysqlops.py --jobs 8 --human --conf-base /s2/mysql/backup_conf --cmd replication_diff
+
+# output json instead of human readable text
+python2 mysqlops.py --conf-base /s2/mysql/backup_conf --cmd replication_diff
+
+# check only one port
+python2 mysqlops.py --conf-base /s2/mysql/backup_conf --cmd replication_diff --port 3401
+```
+
+<!--
+
+mysql multi master
+
+show master status;
+show slave status;
+
+SELECT * FROM performance_schema.replication_connection_status;
+
+select * from mysql.gtid_executed;
+
+close and reopen binary logs:
+flush BINARY logs;
+
+reset slave;
+
+
+change master to master_host="10.173.24.184",
+ master_port=3309,
+ master_user="replicator",
+ master_password="123qwe",
+ MASTER_AUTO_POSITION=1
+ for channel 'master-2';
+
+change master to master_host="10.51.118.223",
+ master_port=3309,
+ master_user="replicator",
+ master_password="123qwe",
+ MASTER_AUTO_POSITION=1
+ for channel 'master-1';
+
+--read-from-remote-master=BINLOG-DUMP-GTIDS
+
+echo 'show binary logs' | /usr/local/mysql-5.7.13/bin/mysql --skip-column-names --socket=/tmp/mysql-3309.sock
+
+/usr/local/mysql-5.7.13/bin/mysqlbinlog -v --host=10.173.24.184 --port=3309 --user=replicator --password=123qwe --read-from-remote-master="BINLOG-DUMP-GTIDS" --exclude-gtids=‘1fcc256b-84b0-11e6-acaf-00163e03bb03:1-326’  mysql-bin.000001 mysql-bin.000002 mysql-bin.000003
+
+/usr/local/mysql-5.7.13/bin/mysqlbinlog --raw --read-from-remote-server --stop-never --host 10.173.24.18  --port 3309 -u replicator -p123qwe mysql-bin.000001 mysql-bin.000002 mysql-bin.000003
+
+!cd ~/mysql-devops/; git fetch ; git merge origin/master
+
+mysql should always starts as readonly, to avoid data write before all binlog synced from remote master/slave.
+Or there is chance mysql write conflict primary id to local.
+
+/usr/local/mysql-5.7.13/bin/mysqlbinlog -v --host=10.173.24.184 --port=3309 --user=replicator --password=123qwe --read-from-remote-master="BINLOG-DUMP-GTIDS" --exclude-gtids='1616352c-8226-11e6-bbab-00163e03bb03:1,  229421a1-8224-11e6-ac58-00163e03bb13:1-2,  4b0918bc-8235-11e6-87fd-00163e03bb03:1,  5fca6d6a-823f-11e6-a40b-00163e03bb03:1-2, 22e3067c-8224-11e6-b3ef-00163e03bb03:1-299'  mysql-bin.000001 mysql-bin.000002 mysql-bin.000003 | /usr/local/mysql-5.7.13/bin/mysql --socket=/tmp/mysql-3309.sock
+
+-->
