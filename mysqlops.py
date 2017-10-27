@@ -4,7 +4,7 @@
 import sys
 import argparse
 import logging
-import yaml
+import json
 
 from pykit import logutil
 from pykit import jobq
@@ -45,10 +45,12 @@ if __name__ == "__main__":
     def worker(port):
 
         try:
-            _worker(port)
+            rst = _worker(port)
             rsts[port] = True
+            return rst
         except Exception as e:
             logger.exception(repr(e))
+            return jobq.EmptyRst
 
     def _worker(port):
 
@@ -78,6 +80,11 @@ if __name__ == "__main__":
             mb.catchup()
         elif cmd == 'replication_diff':
             rst = mb.diff_replication()
+            for k, diff in rst.items():
+                for side in ('onlyleft', 'onlyright'):
+                    if diff[side]['length'] == 0:
+                        del diff[side]
+
             return rst
         else:
             raise ValueError('unsupported command: ' + repr(cmd))
@@ -85,9 +92,9 @@ if __name__ == "__main__":
         return jobq.EmptyRst
 
     def output(rst):
-        print yaml.safe_dump(rst)
+        print json.dumps(rst, indent=2)
 
-    jm = jobq.JobManager([(worker, args.jobs)
+    jm = jobq.JobManager([(worker, args.jobs),
                           (output, 1)])
 
     for port in args.ports:

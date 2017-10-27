@@ -127,15 +127,14 @@ class MysqlBackup(object):
 
         sql = 'show slave status'
 
-        pool = mysqlconnpool.make(self.mysql_addr)
-        mine = self.mysql_query(pool, sql)[0]
+        mine = self.mysql_query(sql)[0]
 
         rst = {}
 
         for src in rpl['source']:
             pool = mysqlconnpool.make({
                     'host': src['host'],
-                    'port': src['port'],
+                    'port': int(src['port']),
                     'user': rpl['user'],
                     'passwd': rpl['password'],
             })
@@ -143,7 +142,7 @@ class MysqlBackup(object):
             r = pool.query(sql)[0]
 
             diff = self.diff_slave_status_gtidset(mine, r)
-            k = '{host}:{port}[{id}]'.format(**src)
+            k = '{host}:{port}-[{id}]'.format(**src)
             rst[k] = diff
 
         return rst
