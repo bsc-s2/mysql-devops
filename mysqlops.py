@@ -28,6 +28,7 @@ if __name__ == "__main__":
     parser.add_argument('--jobs',      type=int, required=False, default=1, help='nr of threads to run')
     parser.add_argument('--cmd',       type=str, required=True,  choices=['backup', 'restore_from_backup', 'catchup', 'setup_replication', 'replication_diff'], help='command to run')
     parser.add_argument('--ports',     type=int, required=False,  nargs='+', help='ports to run "cmd" on')
+    parser.add_argument('--human',     action='store_true', required=False,  help='print result for human')
 
     parser.add_argument('--date-str',            action='store', help='date in form 2017_01_01. It is used in backup file name, or to specify which backup to use for restore. when absent, use date of today')
     parser.add_argument('--clean-after-restore', action='store_true', help='clean backup files after restore')
@@ -96,6 +97,19 @@ if __name__ == "__main__":
                     if diff[side]['length'] == 0:
                         del diff[side]
 
+            if args.human:
+                hm = []
+                for k, diff in rst:
+                    for side in ('onlyleft', 'onlyright'):
+                        d = diff[side]
+                        line = '{k:>20}: {side:>10}: {length:>10}: {rs}'.format(
+                                k=k,
+                                side=side,
+                                length=d['length'],
+                                rs=str(d['gtidset']))
+                        hm.append(line)
+
+                rst = hm
             return rst
         else:
             raise ValueError('unsupported command: ' + repr(cmd))
