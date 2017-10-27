@@ -93,10 +93,11 @@ if __name__ == "__main__":
             mb.catchup()
         elif cmd == 'replication_diff':
             rst = mb.diff_replication()
-            for k, diff in rst.items():
-                for side in ('onlyleft', 'onlyright'):
-                    if diff[side]['length'] == 0:
-                        del diff[side]
+            if not args.full:
+                for k, diff in rst.items():
+                    for side in ('onlyleft', 'onlyright'):
+                        if diff[side]['length'] == 0:
+                            del diff[side]
 
             if args.human:
                 mapping = {
