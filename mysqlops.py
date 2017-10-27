@@ -4,6 +4,7 @@
 import sys
 import argparse
 import logging
+import yaml
 
 from pykit import logutil
 from pykit import jobq
@@ -24,7 +25,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--conf-base', type=str, required=True,  help='base path to config file')
     parser.add_argument('--jobs',      type=int, required=False, default=1, help='nr of threads to run')
-    parser.add_argument('--cmd',       type=str, required=True,  choices=['backup', 'restore_from_backup', 'catchup', 'setup_replication'], help='command to run')
+    parser.add_argument('--cmd',       type=str, required=True,  choices=['backup', 'restore_from_backup', 'catchup', 'setup_replication', 'replication_diff'], help='command to run')
     parser.add_argument('--ports',     type=int, required=True,  nargs='+', help='ports to run "cmd" on')
 
     parser.add_argument('--date-str',            action='store', help='date in form 2017_01_01. It is used in backup file name, or to specify which backup to use for restore. when absent, use date of today')
@@ -75,10 +76,19 @@ if __name__ == "__main__":
                 mb.restore_from_backup()
         elif cmd == 'catchup':
             mb.catchup()
+        elif cmd == 'replication_diff':
+            rst = mb.diff_replication()
+            return rst
         else:
             raise ValueError('unsupported command: ' + repr(cmd))
 
-    jm = jobq.JobManager([(worker, args.jobs)])
+        return jobq.EmptyRst
+
+    def output(rst):
+        print yaml.safe_dump(rst)
+
+    jm = jobq.JobManager([(worker, args.jobs)
+                          (output, 1)])
 
     for port in args.ports:
         jm.put(port)

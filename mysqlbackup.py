@@ -45,6 +45,10 @@ class MysqlIsAlive(Exception):
     pass
 
 
+class MysqlIsDown(Exception):
+    pass
+
+
 class MysqlBackup(object):
 
     def __init__(self, bkp_conf):
@@ -114,6 +118,44 @@ class MysqlBackup(object):
         finally:
             if not alive:
                 self.stop_tmp_mysql(proc)
+
+    def diff_replication(self):
+
+        self.assert_instance_is_alive()
+
+        rpl = self.bkp_conf['replication']
+
+        sql = 'show slave status'
+
+        pool = mysqlconnpool.make(self.mysql_addr)
+        mine = self.mysql_query(pool, sql)[0]
+
+        rst = {}
+
+        for src in rpl['source']:
+            pool = mysqlconnpool.make({
+                    'host': src['host'],
+                    'port': src['port'],
+                    'user': rpl['user'],
+                    'passwd': rpl['password'],
+            })
+
+            r = pool.query(sql)[0]
+
+            diff = self.diff_slave_status_gtidset(mine, r)
+            k = '{host}:{port}[{id}]'.format(**src)
+            rst[k] = diff
+
+        return rst
+
+    def diff_slave_status_gtidset(self, a, b):
+
+        x = mysqlutil.gtidset.load(a['Executed_Gtid_Set'])
+        y = mysqlutil.gtidset.load(b['Executed_Gtid_Set'])
+
+        diff = mysqlutil.gtidset.compare(x, y)
+
+        return diff
 
     def backup(self):
 
@@ -297,6 +339,13 @@ class MysqlBackup(object):
                 pass
             else:
                 raise
+
+    def assert_instance_is_alive(self):
+
+        if self.is_instance_alive():
+            pass
+        else:
+            raise MysqlIsDown(self.render('mysql is down {port}'))
 
     def is_instance_alive(self):
         try:
