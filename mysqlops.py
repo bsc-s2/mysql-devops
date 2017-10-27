@@ -98,6 +98,10 @@ if __name__ == "__main__":
                         del diff[side]
 
             if args.human:
+                mapping = {
+                        'onlyleft': 'OnlyIHave',
+                        'onlyright': 'IDontHave'
+                }
                 hm = []
                 for k, diff in rst.items():
                     for side in ('onlyleft', 'onlyright'):
@@ -106,7 +110,7 @@ if __name__ == "__main__":
                         d = diff[side]
                         line = '{k:>24}: {side:>10}: {length:>10}: {rs}'.format(
                                 k=k,
-                                side=side,
+                                side=mapping[side],
                                 length=d['length'],
                                 rs=str(d['gtidset']))
                         hm.append(line)
