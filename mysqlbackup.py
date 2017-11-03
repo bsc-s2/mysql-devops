@@ -29,6 +29,7 @@ from botocore.client import Config
 from pykit import mysqlconnpool
 from pykit import mysqlutil
 from pykit import logutil
+from pykit import humannum
 
 logger = logging.getLogger(__name__)
 
@@ -155,6 +156,39 @@ class MysqlBackup(object):
         diff = mysqlutil.gtidset.compare(x, y)
 
         return diff
+
+    def optimize_tables(self, db):
+
+        addr = {}
+        addr.update(self.mysql_addr)
+        addr.update({
+            'db': db,
+        })
+
+        pool = mysqlconnpool.make(addr)
+        rsts = pool.query('show table status')
+
+        for rst in rsts:
+            free = humannum.humannum(rst['Data_free'])
+            if rst['Data_free'] > 10 * (1024 ** 3):
+                self.info('optimize `{Name}`, Data_free={free}'.format(
+                    free=free,
+                    **rst))
+                _rsts = pool.query('optimize local table `{Name}`'.format(**rst))
+                self.info('optimize done')
+                for _r in _rsts:
+                    self.info(_r)
+            else:
+                self.info('`{Name}` Data_free={free}, do not need to optimize'.format(
+                    free=free,
+                    **rst))
+
+        self.info('After optimize')
+        rsts = pool.query('show table status')
+        for rst in rsts:
+            rst = humannum.humannum(rst)
+            self.info('`{Name}` Data_length={Data_length} Data_free={Data_free}, '.format(**rst))
+
 
     def backup(self):
 
