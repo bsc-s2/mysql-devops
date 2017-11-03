@@ -169,7 +169,8 @@ class MysqlBackup(object):
         rsts = pool.query('show table status')
 
         for rst in rsts:
-            free = humannum.humannum(int(rst['Data_free']))
+            self._rst_to_number(rst)
+            free = humannum.humannum(rst['Data_free'])
             if rst['Data_free'] > 10 * (1024 ** 3):
                 self.info('optimize `{Name}`, Data_free={free}'.format(
                     free=free,
@@ -188,11 +189,14 @@ class MysqlBackup(object):
         self.info('After optimize')
         rsts = pool.query('show table status')
         for rst in rsts:
-            for k, v in rst.items():
-                if isinstance(v, basestring) and v.isdigit():
-                    rst[k] = int(v)
+            self._rst_to_number(rst)
             rst = humannum.humannum(rst)
             self.info('`{Name}` Data_length={Data_length} Data_free={Data_free}, '.format(**rst))
+
+    def _rst_to_number(self, rst):
+        for k, v in rst.items():
+            if isinstance(v, basestring) and v.isdigit():
+                rst[k] = int(v)
 
 
     def backup(self):
