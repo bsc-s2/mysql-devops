@@ -169,12 +169,21 @@ class MysqlBackup(object):
         rsts = pool.query('show table status')
 
         for rst in rsts:
+
             self._rst_to_number(rst)
-            free = humannum.humannum(rst['Data_free'])
+            msg = self._table_status_str(rst)
+
+            need_optimize = False
+
             if rst['Data_free'] > 10 * (1024 ** 3):
-                self.info('optimize `{Name}`, Data_free={free}'.format(
-                    free=free,
-                    **rst))
+                self.info(msg + ' Need optimize, Data_free > 10G')
+                need_optimize = True
+
+            if float(rst['Data_free']) / float(rst['Data_length']) > 0.5:
+                self.info(msg + ' Need optimize, Data_free/Data_length > 0.5')
+                need_optimize = True
+
+            if need_optimize:
                 _rsts = pool.query('optimize local table `{Name}`'.format(**rst))
 
                 self.info('optimize done')
@@ -182,22 +191,25 @@ class MysqlBackup(object):
                     self.info(str(_r))
 
             else:
-                self.info('`{Name}` Data_free={free}, do not need to optimize'.format(
-                    free=free,
-                    **rst))
+                self.info(msg + ' Do not need optimize')
 
-        self.info('After optimize')
         rsts = pool.query('show table status')
+        self.info('After optimize:')
         for rst in rsts:
             self._rst_to_number(rst)
-            rst = humannum.humannum(rst)
-            self.info('`{Name}` Data_length={Data_length} Data_free={Data_free}, '.format(**rst))
+            msg = self._table_status_str(rst)
+            self.info(msg)
 
     def _rst_to_number(self, rst):
         for k, v in rst.items():
             if isinstance(v, basestring) and v.isdigit():
                 rst[k] = int(v)
 
+    def _table_status_str(self, rst):
+        hum = humannum.humannum(rst)
+        return ('`{Name}` Data_free:{Data_free} / Data_length:{Data_length}'
+                ' = {rate}').format(rate=rst['Data_free'] / rst['Data_length'],
+                                    **hum)
 
     def backup(self):
 
