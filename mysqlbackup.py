@@ -208,8 +208,9 @@ class MysqlBackup(object):
     def _table_status_str(self, rst):
         hum = humannum.humannum(rst)
         return ('`{Name}` Data_free:{Data_free} / Data_length:{Data_length}'
-                ' = {rate}').format(rate=rst['Data_free'] / rst['Data_length'],
-                                    **hum)
+                ' = {rate:.3f}').format(
+                        rate=float(rst['Data_free']) / rst['Data_length'],
+                        **hum)
 
     def backup(self):
 
