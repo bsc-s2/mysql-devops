@@ -9,6 +9,7 @@ import json
 
 from pykit import logutil
 from pykit import jobq
+from pykit import humannum
 
 import mysqlbackup
 
@@ -31,6 +32,7 @@ if __name__ == "__main__":
     parser.add_argument('--db',        type=str, required=False, help='specifies db name to run command on')
     parser.add_argument('--human',     action='store_true', required=False,  help='print result for human')
     parser.add_argument('--full',      action='store_true', required=False,  help='do not reduce any info when display')
+    parser.add_argument('--size',      type=str, required=False,  help='specify size filter expression e.g.: ">10M"')
 
     parser.add_argument('--date-str',            action='store', help='date in form 2017_01_01. It is used in backup file name, or to specify which backup to use for restore. when absent, use date of today')
     parser.add_argument('--clean-after-restore', action='store_true', help='clean backup files after restore')
@@ -130,9 +132,17 @@ if __name__ == "__main__":
         elif cmd == 'table_size':
             rsts = mb.table_sizes(args.db)
             def _out():
-                print args.db
-                for tb in rsts:
-                    print tb
+                print port, args.db
+                for _repr, tbl_stat in rsts:
+                    if args.size is not None:
+                        op = args.size[0]
+                        num = humannum.parseint(args.size[1:])
+
+                        if op == '>' and tbl_stat['Data_length'] < num:
+                            continue
+                        if op == '<' and tbl_stat['Data_length'] > num:
+                            continue
+                    print _repr
             return _out
         else:
             raise ValueError('unsupported command: ' + repr(cmd))

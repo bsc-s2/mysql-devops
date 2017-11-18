@@ -170,9 +170,10 @@ class MysqlBackup(object):
         for rst in rsts:
             self._rst_to_number(rst)
 
+        rsts = list(rsts)
         rsts.sort(key=lambda x: x['Data_length'], reverse=True)
 
-        rsts = ['{Data_length:>6} {Name}'.format(**humannum.humannum(x))
+        rsts = [('{Data_length:>6} {Name}'.format(**humannum.humannum(x)), x)
                 for x in rsts]
 
         return rsts
