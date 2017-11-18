@@ -15,10 +15,22 @@ class TestDictDeepIter(unittest.TestCase):
 
         cases = (
             ({}, []),
-            ({'k1': 'v1'}, [(['k1'], 'v1')]),
-            ({'k1': 'v1', 'k2': 'v2'}, [(['k2'], 'v2'), (['k1'], 'v1')]),
-            ({'k1': {'k11': 'v11'}, 'k2': 'v2'},
-             ([(['k2'], 'v2'), (['k1', 'k11'], 'v11')]),
+            ({'k1': 'v1'},
+             [(['k1'], 'v1')]
+            ),
+            ({'k1': 'v1', 'k2': 'v2'},
+             [
+                     (['k1'], 'v1'),
+                     (['k2'], 'v2'),
+             ]),
+            ({'k1': {'k11': 'v11'},
+              'k2': 'v2',
+              'empty': {},
+            },
+             ([
+                     (['k1', 'k11'], 'v11'),
+                     (['k2'], 'v2'),
+             ]),
              )
         )
 
@@ -45,7 +57,10 @@ class TestDictDeepIter(unittest.TestCase):
         ks = ['mykey']
 
         _in = {'k1': {'k11': 'v11'}, 'k2': 'v2'}
-        _out = [(['mykey', 'k2'], 'v2'), (['mykey', 'k1', 'k11'], 'v11')]
+        _out = [
+                (['mykey', 'k1', 'k11'], 'v11'),
+                (['mykey', 'k2'], 'v2'),
+        ]
         _mes = 'test argument ks in dictutil.dict_depth_iter()'
 
         for rst in dictutil.depth_iter(_in, ks=ks):
@@ -67,44 +82,170 @@ class TestDictDeepIter(unittest.TestCase):
 
         idx = 0
 
-        _in = {'k1': {'k11': {'k111': {'k1111': 'v1111'}}}}
-        _out = [(['k1'], {'k11': {'k111': {'k1111': 'v1111'}}}),
-                (['k1', 'k11'], {'k111': {'k1111': 'v1111'}}),
-                (['k1', 'k11', 'k111'], {'k1111': 'v1111'}),
-                (['k1', 'k11', 'k111', 'k1111'], 'v1111')
-                ]
+        _in = {
+                'k1': {
+                        'k11': {
+                                'k111': {
+                                        'k1111': 'v1111'
+                                },
+                                'empty': {},
+                        },
+                },
+        }
+
+        _out = [
+                (['k1'                         ], {'k11': {'k111': {'k1111': 'v1111'}, 'empty': {}}} ),
+                (['k1', 'k11'                  ], {'k111': {'k1111': 'v1111'}, 'empty': {}}          ),
+                (['k1', 'k11', 'empty'         ], {}                                                 ),
+                (['k1', 'k11', 'k111'          ], {'k1111': 'v1111'}                                 ),
+                (['k1', 'k11', 'k111', 'k1111' ], 'v1111'                                            )
+        ]
 
         for depth in range(1, 5):
             for rst in dictutil.depth_iter(_in, maxdepth=depth):
-                self.assertEqual(
-                    _out[idx],
-                    rst,
-                    'input:: {_in}, output: {rst}, expected: {_out}'.format(
-                        _in=repr(_in),
-                        rst=repr(rst),
-                        _out=repr(_out[idx])
-                    )
-                )
+                dd('depth:', depth)
+                dd('_in:', _in)
+                dd('_out[idx]:', _out[idx])
+                dd('rst:', rst)
+                self.assertEqual(_out[idx], rst)
 
-            idx = idx + 1
+                idx = idx + 1
 
     def test_depth_iter_intermediate(self):
 
+        _in = {
+                'k1': {
+                        'k11': {
+                                'k111': {
+                                        'k1111': 'v1111'
+                                },
+                                'empty': {},
+                        },
+                },
+        }
+
+        _out = [
+                (['k1'                         ], {'k11': {'k111': {'k1111': 'v1111'}, 'empty': {}}} ),
+                (['k1', 'k11'                  ], {'k111': {'k1111': 'v1111'}, 'empty': {}}          ),
+                (['k1', 'k11', 'empty'         ], {}                                                 ),
+                (['k1', 'k11', 'k111'          ], {'k1111': 'v1111'}                                 ),
+                (['k1', 'k11', 'k111', 'k1111' ], 'v1111'                                            )
+        ]
+
         idx = 0
-
-        _in = {'k1': {'k11': {'k111': {'k1111': 'v1111'}}}}
-        _out = [(['k1'], {'k11': {'k111': {'k1111': 'v1111'}}}),
-                (['k1', 'k11'], {'k111': {'k1111': 'v1111'}}),
-                (['k1', 'k11', 'k111'], {'k1111': 'v1111'}),
-                (['k1', 'k11', 'k111', 'k1111'], 'v1111')
-                ]
-
         for rst in dictutil.depth_iter(_in, intermediate=True):
             self.assertEqual(
                 _out[idx],
                 rst)
 
             idx = idx + 1
+
+        self.assertEqual(len(_out), idx)
+
+    def test_depth_iter_empty_as_leaf(self):
+
+        _in = {
+                'k1': {
+                        'k11': {
+                                'k111': {
+                                        'k1111': 'v1111'
+                                },
+                                'empty': {},
+                        },
+                },
+        }
+
+        _out = [
+            (['k1', 'k11', 'empty'], {}),
+            (['k1', 'k11', 'k111', 'k1111'], 'v1111'),
+        ]
+
+        idx = 0
+        for rst in dictutil.depth_iter(_in, empty_leaf=True):
+            self.assertEqual(_out[idx], rst)
+            idx = idx + 1
+
+        self.assertEqual(len(_out), idx)
+
+    def test_depth_iter_empty_as_leaf_and_intermediate(self):
+
+        _in = {
+                'k1': {
+                        'k11': {
+                                'k111': {
+                                        'k1111': 'v1111'
+                                },
+                                'empty': {},
+                        },
+                },
+        }
+
+        _out = [
+            (['k1'                         ], {'k11': {'k111': {'k1111': 'v1111'}, 'empty': {}}} ),
+            (['k1', 'k11'                  ], {'k111': {'k1111': 'v1111'}, 'empty': {}}          ),
+            (['k1', 'k11', 'empty'         ], {}                                                 ),
+            (['k1', 'k11', 'k111'          ], {'k1111': 'v1111'}                                 ),
+            (['k1', 'k11', 'k111', 'k1111' ], 'v1111'                                            )
+        ]
+
+        idx = 0
+        for rst in dictutil.depth_iter(_in, intermediate=True, empty_leaf=True):
+            self.assertEqual(_out[idx], rst)
+            idx = idx + 1
+
+        self.assertEqual(len(_out), idx)
+
+    def test_depth_iter_is_allowed(self):
+
+        _in = {
+            'k1': {
+                'k11': {
+                    'k111': {
+                        'k1111': 'v1111'
+                    },
+                    'empty': {},
+                },
+            },
+        }
+
+        cases = (
+                ({'is_allowed': lambda ks, v: isinstance(v, dict) and len(v) == 0,
+                  },
+                 ['k1', 'k11', 'empty'], {},
+                 'choose only empty dict value',
+                 ),
+
+                ({'is_allowed': lambda ks, v: isinstance(v, str),
+                  },
+                 ['k1', 'k11', 'k111', 'k1111'], 'v1111',
+                 'choose only string value',
+                 ),
+
+                ({'is_allowed': lambda ks, v: isinstance(v, str),
+                  'intermediate': True,
+                  },
+                 ['k1', 'k11', 'k111', 'k1111'], 'v1111',
+                 'is_allowed should override intermediate',
+                 ),
+
+                ({'is_allowed': lambda ks, v: isinstance(v, str),
+                  'empty_leaf': True,
+                  },
+                 ['k1', 'k11', 'k111', 'k1111'], 'v1111',
+                 'is_allowed should override empty_leaf',
+                 ),
+
+        )
+
+        for kwargs, expected_ks, expected_v, msg in cases:
+
+            dd(msg)
+            dd(kwargs)
+            dd('expected:', expected_ks, expected_v)
+
+            for ks, v in dictutil.depth_iter(_in, **kwargs):
+                self.assertEqual(expected_ks, ks)
+                self.assertEqual(expected_v, v)
 
 
 class TestDictBreadthIter(unittest.TestCase):

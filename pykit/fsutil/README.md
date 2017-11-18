@@ -24,6 +24,7 @@
   - [fsutil.get_disk_partitions](#fsutilget_disk_partitions)
   - [fsutil.get_mountpoint](#fsutilget_mountpoint)
   - [fsutil.get_path_fs](#fsutilget_path_fs)
+  - [fsutil.get_path_inode_usage](#fsutilget_path_inode_usage)
   - [fsutil.get_path_usage](#fsutilget_path_usage)
   - [fsutil.makedirs](#fsutilmakedirs)
   - [fsutil.read_file](#fsutilread_file)
@@ -371,6 +372,32 @@ Return the name of device where the `path` is mounted.
 the file-system name, such as `ext4` or `hfs`.
 
 
+##  fsutil.get_path_inode_usage
+
+**syntax**:
+`fsutil.get_path_inode_usage(path)`
+
+Collect inode usage information of the file system `path` is mounted on.
+
+**arguments**:
+
+- `path`:
+specifies the fs - path to collect usage info.
+Such as `/tmp` or `/home/alice`.
+
+**return**:
+a dictionary in the following format:
+
+```json
+{
+    'total':     total number of inode,
+    'used':      used inode(includes inode reserved for super user),
+    'available': total - used,
+    'percent':   float(used) / 'total'
+}
+```
+
+
 ##  fsutil.get_path_usage
 
 **syntax**:
@@ -519,8 +546,8 @@ Nothing
 ##  fsutil.calc_checksums
 
 **syntax**:
-`fsutil.calc_checksums(path, sha1=False, md5=False, crc32=False,
-    block_size=32*1024**2, io_limit=32*1024**2)`
+`fsutil.calc_checksums(path, sha1=False, md5=False, crc32=False, sha256=False,
+                   block_size=READ_BLOCK, io_limit=READ_BLOCK):`
 
 Calculate checksums of `path`, like: `sha1` `md5` `crc32`.
 
@@ -530,11 +557,12 @@ from pykit import fsutil
 file_name = 'test.file'
 
 fsutil.write_file(file_name, '')
-print fsutil.calc_checksums(file_name, sha1=True, md5=True, crc32=False)
+print fsutil.calc_checksums(file_name, sha1=True, md5=True, crc32=False, sha256=True)
 #{
 # 'sha1': 'da39a3ee5e6b4b0d3255bfef95601890afd80709',
 # 'md5': 'd41d8cd98f00b204e9800998ecf8427e',
-# 'crc32': None
+# 'crc32': None,
+# 'sha256':'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
 #}
 ```
 
@@ -543,7 +571,7 @@ print fsutil.calc_checksums(file_name, sha1=True, md5=True, crc32=False)
 -   `path`:
     is the file path to calculate.
 
--   `sha1` and `md5` and `crc32`:
+-   `sha1` and `md5` and `crc32` and `sha256`:
     are checksum types to calculate. Default is `False`.
 
     The result of this type is `None` if the checksum type is `False`.
@@ -557,7 +585,7 @@ print fsutil.calc_checksums(file_name, sha1=True, md5=True, crc32=False)
     There is no limitation if `io_limit` is negative number.
 
 **return**:
-a dict with keys `sha1` and `md5` and `crc32`.
+a dict with keys `sha1` and `md5` and `crc32` and `sha256`.
 
 
 #   Author
