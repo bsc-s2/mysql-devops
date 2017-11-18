@@ -157,6 +157,26 @@ class MysqlBackup(object):
 
         return diff
 
+    def table_sizes(self, db):
+        addr = {}
+        addr.update(self.mysql_addr)
+        addr.update({
+            'db': db,
+        })
+
+        pool = mysqlconnpool.make(addr)
+        rsts = pool.query('show table status')
+
+        for rst in rsts:
+            self._rst_to_number(rst)
+
+        rsts.sort(key=lambda x: x['Data_length'], reverse=True)
+
+        rsts = ['{Data_length:>6} {Name}'.format(**humannum.humannum(x))
+                for x in rsts]
+
+        return rsts
+
     def optimize_tables(self, db):
 
         addr = {}
