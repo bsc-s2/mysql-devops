@@ -668,6 +668,7 @@ class MysqlBackup(object):
         cwd = self.bkp_conf['mysql_base']
         proc = subprocess.Popen(cmd,
                                 cwd=cwd,
+                                close_fds=True,
                                 shell=True,
                                 stderr=subprocess.PIPE,
                                 stdout=subprocess.PIPE)

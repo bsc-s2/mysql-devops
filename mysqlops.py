@@ -27,7 +27,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--conf-base', type=str, required=False,  help='base path to config file')
     parser.add_argument('--jobs',      type=int, required=False, default=1, help='nr of threads to run')
-    parser.add_argument('--cmd',       type=str, required=True,  choices=['backup', 'restore_from_backup', 'catchup', 'optimize', 'setup_replication', 'replication_diff', 'table_size'], help='command to run')
+    parser.add_argument('--cmd',       type=str, required=True,  choices=['backup', 'restore', 'restore_from_backup', 'catchup', 'optimize', 'setup_replication', 'replication_diff', 'table_size'], help='command to run')
     parser.add_argument('--ports',     type=int, required=False, nargs='+', help='ports to run "cmd" on')
     parser.add_argument('--db',        type=str, required=False, help='specifies db name to run command on')
     parser.add_argument('--human',     action='store_true', required=False,  help='print result for human')
@@ -89,6 +89,15 @@ if __name__ == "__main__":
             mb.backup()
         elif cmd == 'setup_replication':
             mb.setup_replication()
+
+        elif cmd == 'restore':
+            if mb.has_data_dir():
+                logger.info('data-dir presents, skip restore_from_backup')
+                pass
+            else:
+                mb.restore_from_backup()
+            mb.catchup()
+
         elif cmd == 'restore_from_backup':
             if mb.has_data_dir():
                 logger.info('data-dir presents, skip restore_from_backup')
