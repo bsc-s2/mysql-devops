@@ -33,6 +33,7 @@ if __name__ == "__main__":
     parser.add_argument('--human',     action='store_true', required=False,  help='print result for human')
     parser.add_argument('--full',      action='store_true', required=False,  help='do not reduce any info when display')
     parser.add_argument('--size',      type=str, required=False,  help='specify size filter expression e.g.: ">10M"')
+    parser.add_argument('--sortby',    type=str, required=False,  choices=['free', 'total', 'used'], help='sort by')
 
     parser.add_argument('--date-str',            action='store', help='date in form 2017_01_01. It is used in backup file name, or to specify which backup to use for restore. when absent, use date of today')
     parser.add_argument('--clean-after-restore', action='store_true', help='clean backup files after restore')
@@ -142,7 +143,7 @@ if __name__ == "__main__":
                 rst = _out
             return rst
         elif cmd == 'table_size':
-            rsts = mb.table_sizes(args.db)
+            rsts = mb.table_sizes(args.db, args.sortby)
             def _out():
                 print port, args.db
                 for _repr, tbl_stat in rsts:

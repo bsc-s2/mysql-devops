@@ -157,7 +157,18 @@ class MysqlBackup(object):
 
         return diff
 
-    def table_sizes(self, db):
+    def table_sizes(self, db, sortby=None):
+
+        if sortby is None:
+            sortby = 'total'
+
+        mp = {
+            'free': lambda x: x['Data_free'],
+            'used': lambda x: x['Data_length'],
+            'total': lambda x: x['Data_free'] + x['Data_length'],
+        }
+        sort_key = mp[sortby]
+
         addr = {}
         addr.update(self.mysql_addr)
         addr.update({
@@ -171,9 +182,9 @@ class MysqlBackup(object):
             self._rst_to_number(rst)
 
         rsts = list(rsts)
-        rsts.sort(key=lambda x: x['Data_length'], reverse=True)
+        rsts.sort(key=sort_key, reverse=True)
 
-        rsts = [('{Data_length:>6} {Name}'.format(**humannum.humannum(x)), x)
+        rsts = [('{Data_length:>6} free-able: {Data_free:>6} {Name}'.format(**humannum.humannum(x)), x)
                 for x in rsts]
 
         return rsts
