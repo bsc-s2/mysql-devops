@@ -130,7 +130,7 @@ if __name__ == "__main__":
                 hm = []
                 for k, diff in rst.items():
                     if isinstance(diff, basestring):
-                        hm.append(diff)
+                        hm.append('{k:>24}: {desc}'.format(k=k, desc=diff))
                         continue
                     for side in ('onlyleft', 'onlyright'):
                         if side not in diff:

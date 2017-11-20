@@ -145,9 +145,10 @@ class MysqlBackup(object):
             try:
                 r = pool.query(sql)[0]
             except MySQLdb.OperationalError as e:
-                rst[k] = 'Unreachable: ' + k
-            diff = self.diff_slave_status_gtidset(mine, r)
-            rst[k] = diff
+                rst[k] = 'Unreachable: ' + repr(e)
+            else:
+                diff = self.diff_slave_status_gtidset(mine, r)
+                rst[k] = diff
 
         return rst
 
