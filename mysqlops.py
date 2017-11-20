@@ -115,6 +115,9 @@ if __name__ == "__main__":
             rst = mb.diff_replication()
             if not args.full:
                 for k, diff in rst.items():
+                    if isinstance(diff, basestring):
+                        continue
+
                     for side in ('onlyleft', 'onlyright'):
                         if diff[side]['length'] == 0:
                             del diff[side]
@@ -126,6 +129,9 @@ if __name__ == "__main__":
                 }
                 hm = []
                 for k, diff in rst.items():
+                    if isinstance(diff, basestring):
+                        hm.append(diff)
+                        continue
                     for side in ('onlyleft', 'onlyright'):
                         if side not in diff:
                             continue

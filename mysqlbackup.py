@@ -140,10 +140,13 @@ class MysqlBackup(object):
                     'passwd': rpl['password'],
             })
 
-            r = pool.query(sql)[0]
-
-            diff = self.diff_slave_status_gtidset(mine, r)
             k = '{host}:{port}-[{id}]'.format(**src)
+
+            try:
+                r = pool.query(sql)[0]
+            except MySQLdb.OperationalError as e:
+                rst[k] = 'Unreachable: ' + k
+            diff = self.diff_slave_status_gtidset(mine, r)
             rst[k] = diff
 
         return rst
