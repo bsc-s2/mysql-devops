@@ -161,7 +161,10 @@ class MysqlBackup(object):
 
         return diff
 
-    def table_sizes(self, db, sortby=None):
+    def table_sizes(self, db=None, sortby=None):
+
+        if db is None:
+            db = self.get_dbs()[0]
 
         if sortby is None:
             sortby = 'total'
@@ -193,7 +196,10 @@ class MysqlBackup(object):
 
         return rsts
 
-    def optimize_tables(self, db):
+    def optimize_tables(self, db=None):
+
+        if db is None:
+            db = self.get_dbs()[0]
 
         addr = {}
         addr.update(self.mysql_addr)
@@ -247,6 +253,27 @@ class MysqlBackup(object):
                 ' = {rate:.3f}').format(
                         rate=float(rst['Data_free']) / rst['Data_length'],
                         **hum)
+
+    def get_dbs(self, exclude=None):
+
+        addr = {}
+        addr.update(self.mysql_addr)
+
+        if exclude is None:
+            exclude = (
+                'information_schema',
+                'mysql',
+                'performance_schema',
+                'sys',
+            )
+
+        pool = mysqlconnpool.make(addr)
+        rsts = pool.query('show databases')
+        dbs = [x['Database'] for x in rsts
+               if x['Database'] not in exclude]
+
+        return dbs
+
 
     def backup(self):
 
