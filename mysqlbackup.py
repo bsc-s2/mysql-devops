@@ -96,7 +96,7 @@ class MysqlBackup(object):
             pool = mysqlconnpool.make(self.mysql_addr)
             for sql in sqls_reset:
                 self.mysql_pool_query(pool, sql)
-                time.sleep(0.5)
+                time.sleep(1)
 
             for src in rpl['source']:
                 kwarg = copy.deepcopy(rpl)
