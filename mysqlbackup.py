@@ -830,6 +830,7 @@ class MysqlBackup(object):
                         " {conf_base}/my.cnf"
                         " {mysql_data_dir}/")
         )
+        self.chown('{mysql_data_dir}/my.cnf')
 
     def list_binlog_fns(self):
 
