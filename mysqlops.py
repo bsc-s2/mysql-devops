@@ -27,7 +27,17 @@ if __name__ == "__main__":
 
     parser.add_argument('--conf-base', type=str, required=False,  help='base path to config file')
     parser.add_argument('--jobs',      type=int, required=False, default=1, help='nr of threads to run')
-    parser.add_argument('--cmd',       type=str, required=True,  choices=['backup', 'restore', 'restore_from_backup', 'catchup', 'optimize', 'setup_replication', 'replication_diff', 'table_size'], help='command to run')
+    parser.add_argument('--cmd',       type=str, required=True,  choices=[
+        'backup',
+        'catchup',
+        'make_mycnf',
+        'optimize',
+        'replication_diff',
+        'restore',
+        'restore_from_backup',
+        'setup_replication',
+        'table_size',
+    ], help='command to run')
     parser.add_argument('--ports',     type=int, required=False, nargs='+', help='ports to run "cmd" on')
     parser.add_argument('--db',        type=str, required=False, help='specifies db name to run command on')
     parser.add_argument('--human',     action='store_true', required=False,  help='print result for human')
@@ -107,6 +117,9 @@ if __name__ == "__main__":
                 mb.restore_from_backup()
         elif cmd == 'catchup':
             mb.catchup()
+
+        elif cmd == 'make_mycnf':
+            mb.make_runtime_my_cnf()
 
         elif cmd == 'optimize':
             mb.optimize_tables(args.db)

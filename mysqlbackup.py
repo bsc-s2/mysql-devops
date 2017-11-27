@@ -414,7 +414,7 @@ class MysqlBackup(object):
 
     def catchup(self):
         self.info_r('catchup start...')
-        self.copy_backup_my_cnf()
+        self.make_runtime_my_cnf()
 
         if self.is_instance_alive():
             self.info_r('{port} is active, skip applying remote binlog')
@@ -824,7 +824,7 @@ class MysqlBackup(object):
     def has_data_dir(self):
         return os.path.exists(self.render("{mysql_data_dir}"))
 
-    def copy_backup_my_cnf(self):
+    def make_runtime_my_cnf(self):
         self.shell_run('copy {conf_base}/my.cnf to {mysql_data_dir}/',
                        ("cp"
                         " {conf_base}/my.cnf"
