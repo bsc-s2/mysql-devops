@@ -27,7 +27,10 @@ n_group_commit=$($mysql_dir/bin/mysqlbinlog $last_binlog_fn \
     | head -n $n_binlog \
     | awk '{print $11}' \
     | uniq -c \
-    | wc)
+    | wc -l)
+
 
 let avg=n_binlog/n_group_commit
-print $avg
+
+echo "binlog-fn: $last_binlog_fn"
+echo "tx/commit: $avg"
