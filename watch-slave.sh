@@ -14,7 +14,7 @@ cmds=''
 cmds="$cmds $mysql_cmd"' "show slave status\G" | grep "Slave_IO_State\|Master_Host\|Slave_IO_Running\|Slave_SQL_Running\|Last_Error\|Seconds_Behind_Master\|Last_IO_Error\|Last_SQL_Error\|Master_Server_Id\|Master_UUID\|Slave_SQL_Running_State\|Channel_Name" | awk -F: '"'"$ak"' | sort | column -t -s:;"
 cmds="$cmds $mysql_cmd"' "select @@read_only, @@server_uuid, @@server_id\G"; '
 cmds="$cmds $mysql_cmd"' "show master status\G"; '
-cmds="$cmds $mysql_cmd"' "show processlist"; '
+cmds="$cmds $mysql_cmd"' "show processlist" | head -n10; '
 
 if [ ".$2" = ".-" ]; then
     eval "$cmds"
