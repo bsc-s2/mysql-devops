@@ -38,7 +38,7 @@ if __name__ == "__main__":
         'setup_replication',
         'table_size',
     ], help='command to run')
-    parser.add_argument('--ports',     type=int, required=False, nargs='+', help='ports to run "cmd" on')
+    parser.add_argument('--ports',     type=int, required=False, nargs='*', help='ports to run "cmd" on')
     parser.add_argument('--db',        type=str, required=False, help='specifies db name to run command on')
     parser.add_argument('--human',     action='store_true', required=False,  help='print result for human')
     parser.add_argument('--full',      action='store_true', required=False,  help='do not reduce any info when display')
