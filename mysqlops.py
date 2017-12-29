@@ -26,6 +26,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='run commands for one or more ports concurrenty')
 
     parser.add_argument('--conf-base', type=str, required=False,  help='base path to config file')
+    parser.add_argument('--conf-fn',   type=str, required=False,  help='conf file name for each port')
     parser.add_argument('--jobs',      type=int, required=False, default=1, help='nr of threads to run')
     parser.add_argument('--cmd',       type=str, required=True,  choices=[
         'backup',
@@ -53,6 +54,9 @@ if __name__ == "__main__":
 
     if args.conf_base is None:
         args.conf_base = '/s2/mysql/backup_conf'
+
+    if args.conf_fn is None:
+        args.conf_fn = 'backup_conf'
 
     ports = args.ports
 
@@ -84,8 +88,10 @@ if __name__ == "__main__":
 
     def _worker(port):
 
-        conf_path = '{conf_base}/{port}/backup_conf.yaml'.format(
-                conf_base=args.conf_base, port=port)
+        conf_path = '{conf_base}/{port}/{conf_fn}.yaml'.format(
+                conf_base=args.conf_base,
+                conf_fn=args.conf_fn,
+                port=port)
 
         conf = mysqlbackup.load_conf_from_file(conf_path)
 
