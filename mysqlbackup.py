@@ -59,6 +59,11 @@ class MysqlBackup(object):
         self.mysql_addr = {'unix_socket': self.bkp_conf['mysql_socket'],
                            'user': 'root'}
 
+        if 'root_password' in self.bkp_conf:
+            self.mysql_addr.update({
+                    'passwd': self.bkp_conf['root_password'],
+            })
+
         self.mysql_conn_pool = mysqlconnpool.make(self.mysql_addr)
 
     def setup_replication(self):
