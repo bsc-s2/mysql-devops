@@ -302,6 +302,7 @@ class MysqlBackup(object):
                        ("innobackupex"
                         " --defaults-file={mysql_my_cnf}"
                         " --user=root"
+                        + self._get_arg_password() +
                         " --slave-info"
                         " --no-timestamp"
                         " {backup_data_dir}")
@@ -335,6 +336,7 @@ class MysqlBackup(object):
                        ('bin/mysqlbinlog'
                         ' --socket={mysql_socket}'
                         ' --user=root'
+                        + self._get_arg_password() +
                         ' --raw'
                         ' --read-from-remote-server'
                         ' --result-file={backup_binlog_dir}/'
@@ -935,6 +937,14 @@ class MysqlBackup(object):
 
     def debug(self, s):
         logger.debug(self.bkp_conf['mes'] + ': ' + s)
+
+    def _get_arg_password(self):
+        if 'root_password' in self.bkp_conf:
+            arg_password = ' --password=' + self.bkp_conf['root_password']
+        else:
+            arg_password = ''
+
+        return arg_password
 
 
 def _shell_run(cmd, cwd=None):
