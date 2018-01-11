@@ -15,6 +15,10 @@
   - [dictutil.make_setter](#dictutilmake_setter)
     - [Synopsis](#synopsis-1)
   - [dictutil.contains](#dictutilcontains)
+  - [dictutil.combineto](#dictutilcombineto)
+  - [dictutil.combine](#dictutilcombine)
+  - [dictutil.addto](#dictutiladdto)
+  - [dictutil.add](#dictutiladd)
 - [Author](#author)
 - [Copyright and License](#copyright-and-license)
 
@@ -316,10 +320,9 @@ Returns the value of the item specified by `key_path`.
     dictionary.
 
 -   `key_path`:
-    is a dot separated path string of key hierarchy to get an item from a
-    dictionary.
+    can be string , tuple or list.
 
-    Example: `foo.bar` is same as `some_dict["foo"]["bar"]`.
+    Example: 'foo.bar' or `('foo','bar')` or `['foo','bar']` is same as `some_dict["foo"]["bar"]`.
 
 -   `vars`:
     is a dictionary contains dynamic keys in `key_path`.
@@ -373,10 +376,9 @@ print get_second({"time": {"hour": 11, "minute": 20}})
 **arguments**:
 
 -   `key_path`:
-    is a dot separated path string of key hierarchy to get an item from a
-    dictionary.
+    can be string , tuple or list.
 
-    Example: `foo.bar` is same as `some_dict["foo"]["bar"]`.
+    Example: 'foo.bar' or `('foo','bar')` or `['foo','bar']` is same as `some_dict["foo"]["bar"]`.
 
 -   `default`:
     is the default value if the item is not found.
@@ -390,7 +392,7 @@ the item value found by key_path, or the default value if not found.
 ##  dictutil.make_setter
 
 **syntax**:
-`dictutil.make_setter(key_path, default=None, incr=False)`
+`dictutil.make_setter(key_path, value=None, incr=False)`
 
 It creates a function `setter(dic, value=None, vars={})` that can be used to
 set(or increment) the item value specified by `key_path` in a dictionary `dic`.
@@ -418,9 +420,9 @@ print tm
 **arguments**:
 
 -   `key_path`:
-    is a dot separated key path to locate an item in a dictionary.
+    can be string , tuple or list.
 
-    Example: `foo.bar` is same as `some_dict["foo"]["bar"]`.
+    Example: 'foo.bar' or `('foo','bar')` or `['foo','bar']` is same as `some_dict["foo"]["bar"]`.
 
 -   `value`:
     is the value to use if `setter` is called with its own `value` set to `None`.
@@ -583,6 +585,84 @@ Algorithm:
 
     Thus we record every pair of `a` tree node and `b` tree node that we have
     compared in the traversal.
+
+## dictutil.combineto
+
+**syntax**:
+`dictutil.combineto(a, b, op, exclude=None, recursive=True)`
+
+**arguments**:
+
+-   `a`:
+    the dict to combine to, must be a dict.
+
+-   `b`:
+    the dict to combine with, if it is not a dict, it will be ignored.
+
+-   `op`:
+    the operation to take when combining common keys, such as `operator.add`.
+
+-   `exclude`:
+    a dict used to specify keys than should not be combined,
+    if exclude = {'k1': {'k2': True}}, then b['k1']['k2'] will be ignored,
+    if exclude = {'k1': True}, then b['k1'] will be ignored totally.
+
+-   `recursive`:
+    a bool value, if set to `False`, will not dive into sub dict.
+
+    ```python
+    import operator
+    from pykit import dictutil
+
+    a = {
+        'k1': 1,
+        'k3': {'s2': 'foo'},
+    }
+    b = {
+        'k1': 2,
+        'k2': 3,
+        'k3': {'s1': 'foo', 's2': 'bar'},
+        'k4': {'s1': 'bar'},
+    }
+    exclude = {
+        'k4': True,
+        'k3': {'s1': True},
+    }
+    r = dictutil.combineto(a, b, operator.add, exclude=exclude)
+
+    # r is a
+    #a:
+    #{
+    #    'k1': 3,
+    #    'k2': 3,
+    #    'k3': {'s2': 'foobar'},
+    #}
+    ```
+**return**:
+the combined dict.
+
+## dictutil.combine
+
+same as dictutil.combineto, but the first dict will not be modified,
+it will return a new dict.
+
+**syntax**:
+`dictutil.combine(a, b, op, exclude=None, recursive=True)`
+
+## dictutil.addto
+
+same as dictutil.combineto, but only use operator `operator.add`.
+
+**syntax**:
+`dictutil.addto(a, b, exclude=None, recursive=True)`
+
+## dictutil.add
+
+same as dictutil.addto, but the first dict will not be modified,
+it will return a new dict.
+
+**syntax**:
+`dictutil.add(a, b, exclude=None, recursive=True)`
 
 #   Author
 

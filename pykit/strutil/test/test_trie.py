@@ -5,7 +5,6 @@ import os
 import unittest
 
 from pykit import dictutil
-from pykit import fsutil
 from pykit import strutil
 from pykit import ututil
 
@@ -29,6 +28,57 @@ class TestTrie(unittest.TestCase):
                 'b123',
                 'b14',
         )
+        self.iterables = (
+            (1, 'ab', '我'),
+            (1, 'ab', '我是'),
+            (1, 'ab', '我是好'),
+            (1, 'ab', '我是好人'),
+            (1, 'c',  '我是好人'),
+            (1, 'd',  '人'),
+            (1, 'd',  '人人'),
+            (1, 'd',  '人人人'),
+            (1, 'd',  '人人人人'),
+            (2, 'a',  '人人'),
+            (2, 'b',  'x'),
+            (2, 'b',  'x', 'a'),
+            (2, 'b',  'x', 'b'),
+            (2, 'b',  'x', 'c'),
+            (2, 'b',  'x', 'cd'),
+            (2, 'b',  'xx'),
+            (2, 'b',  'y'),
+            (2, 'b',  'z'),
+        )
+
+    def test_trie_iterable(self):
+
+        t = strutil.make_trie(self.iterables, node_max_num=3)
+
+        dd('trie:')
+        dd(str(t))
+
+        self.assertEqual(len(self.iterables), t.n)
+
+        for ks, v in dictutil.depth_iter(t, is_allowed=lambda ks, v: v.is_eol):
+
+            s = tuple(ks)
+            dd('whole string: ', s, v)
+            self.assertTrue(s in self.iterables)
+
+    def test_sharding_iterable(self):
+
+        dd()
+
+        expected = (
+            (None,           5),
+            ((1, 'd', '人'), 5),
+            ((2, 'b', 'x'),  5),
+            ((2, 'b', 'xx'), 3),
+        )
+
+        rst = strutil.sharding(self.iterables, size=5, joiner=tuple)
+        for i, (start, n) in enumerate(rst):
+            dd('{start:<20} {n:>10}'.format(start=start, n=n))
+            self.assertEqual(expected[i], (start, n))
 
     def test_trie_whole_string(self):
 
@@ -40,11 +90,10 @@ class TestTrie(unittest.TestCase):
         self.assertEqual(len(self.strs), t.n)
 
         # only whole strings
-        for ks, v in dictutil.depth_iter(t, is_allowed=lambda ks, v: strutil.EOL in v):
-
-            self.assertEqual(1, v[strutil.EOL].n)
+        for ks, v in dictutil.depth_iter(t, is_allowed=lambda ks, v: v.is_eol):
 
             s = ''.join(ks)
+            dd('whole string: ', s, v)
             self.assertTrue(s in self.strs)
 
     def test_trie_prefix_count(self):
@@ -55,7 +104,7 @@ class TestTrie(unittest.TestCase):
         dd(str(t))
 
         # all prefixes, might be also a whole string.
-        for ks, v in dictutil.depth_iter(t, is_allowed=lambda ks, v: v.char != strutil.EOL):
+        for ks, v in dictutil.depth_iter(t, intermediate=True):
 
             dd('==== got keys:', ks, 'sub trie:')
             dd(v)
@@ -113,18 +162,18 @@ class TestTrie(unittest.TestCase):
         rst = strutil.sharding(lines, size=_size, accuracy=_accuracy)
 
         expected = [
-                (''      , 209, ),
-                ('M'     , 202, ),
-                ('TestU' , 202, ),
-                ('br'    , 202, ),
-                ('dc'    , 201, ),
-                ('exi'   , 202, ),
-                ('inf'   , 204, ),
-                ('may'   , 205, ),
-                ('pf'    , 200, ),
-                ('rew'   , 208, ),
-                ('suc'   , 204, ),
-                ('wh'    , 56,  ),
+            (None,    209, ),
+            ('M',     202, ),
+            ('TestU', 202, ),
+            ('br',    202, ),
+            ('dc',    201, ),
+            ('exi',   202, ),
+            ('inf',   204, ),
+            ('may',   205, ),
+            ('pf',    200, ),
+            ('rew',   208, ),
+            ('suc',   204, ),
+            ('wh',    56, ),
         ]
 
         for i, (start, size) in enumerate(rst):
@@ -148,7 +197,6 @@ class TestTrie(unittest.TestCase):
             rst = strutil.sharding(lines, size=_size, accuracy=_accuracy)
 
             tot = 0
-            prev = None
             for i, (start, size) in enumerate(rst):
 
                 dd('{start:<10} {size:>20}'.format(start=start, size=size))
