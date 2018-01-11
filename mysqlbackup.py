@@ -66,6 +66,101 @@ class MysqlBackup(object):
 
         self.mysql_conn_pool = mysqlconnpool.make(self.mysql_addr)
 
+    def create_user(self,
+                    username, password,
+                    host='%',
+                    privileges=None,
+                    binlog=True):
+
+        # To setup replication, a replicator user should be created on each
+        # instance, before binlog can be sync-ed.
+        # But after setting up binlog, the row in mysql.user of the `replicator`
+        # will be sync-ed and results in conflicting user row.
+        #
+        # Thus we might need to disable binlog when creating replication user.
+        # See: https://dev.mysql.com/doc/refman/5.7/en/group-replication-user-credentials.html
+
+        self.info('create or change user:'
+                  ' {username}@{host},'
+                  ' password: {password}'
+                  ' privileges: {privileges}'
+                  ' binlog: {binlog}'.format(
+                          username=username,
+                          password=password,
+                          host=host,
+                          privileges=privileges,
+                          binlog=binlog))
+
+        username = MySQLdb.escape_string(username)
+        password = MySQLdb.escape_string(password)
+        host = MySQLdb.escape_string(host)
+
+        # privileges is a list of tuple (<table>, <privilege>)
+
+        alive = self.is_instance_alive()
+        proc = None
+
+        if not alive:
+            proc = self.start_tmp_mysql()
+
+        try:
+            pool = mysqlconnpool.make(self.mysql_addr)
+
+            if not binlog:
+                self.mysql_pool_query(pool, 'SET SQL_LOG_BIN=0')
+
+            rst = self.mysql_pool_query(
+                    pool,
+                    'SELECT `Host`, `User` FROM `mysql`.`user`'
+                    ' WHERE `Host`="{host}" AND `User`="{username}"'.format(
+                            host=host,
+                            username=username))
+
+            if len(rst) == 0:
+                self.mysql_pool_query(
+                        pool,
+                        'CREATE USER "{username}"@"{host}" IDENTIFIED BY "{password}"'.format(
+                                host=host,
+                                username=username,
+                                password=password))
+            else:
+                # user exists, just set password
+                self.mysql_pool_query(
+                        pool,
+                        'SET PASSWORD FOR "{username}"@"{host}" = "{password}"'.format(
+                                host=host,
+                                username=username,
+                                password=password))
+
+            for tbl, prv in privileges:
+
+                # `prv` is a key of privilege set defined in
+                # mysqlutil.privileges, or a tuple of mysql privileges.
+                # Such as: "monitor", "readwrite", or just ("REPLICATION SLAVE")
+                #
+                # Convert it to tuple.
+                if isinstance(prv, basestring):
+                    prv = mysqlutil.privileges[prv]
+
+                prv = ','.join(prv)
+
+                self.mysql_pool_query(
+                        pool,
+                        'GRANT {prv} ON {tbl} TO "{username}"@"{host}"'.format(
+                                host=host,
+                                username=username,
+                                prv=prv,
+                                tbl=tbl))
+
+            self.mysql_pool_query(pool, 'FLUSH PRIVILEGES')
+
+            if not binlog:
+                self.mysql_pool_query(pool, 'SET SQL_LOG_BIN=1')
+
+        finally:
+            if not alive:
+                self.stop_tmp_mysql(proc)
+
     def setup_replication(self):
 
         # replication:

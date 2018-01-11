@@ -38,6 +38,7 @@ if __name__ == "__main__":
         'restore_from_backup',
         'setup_replication',
         'table_size',
+        'user',
     ], help='command to run')
     parser.add_argument('--ports',     type=int, required=False, nargs='*', help='ports to run "cmd" on')
     parser.add_argument('--db',        type=str, required=False, help='specifies db name to run command on')
@@ -45,6 +46,14 @@ if __name__ == "__main__":
     parser.add_argument('--full',      action='store_true', required=False,  help='do not reduce any info when display')
     parser.add_argument('--size',      type=str, required=False,  help='specify size filter expression e.g.: ">10M"')
     parser.add_argument('--sortby',    type=str, required=False,  choices=['free', 'total', 'used'], help='sort by')
+
+    # options for command 'user'
+    parser.add_argument('--username',  type=str, required=True,  help='user name to create')
+    parser.add_argument('--password',  type=str, required=True,  help='login password')
+    parser.add_argument('--host',      type=str, required=False, default='%', help='user host')
+    parser.add_argument('--privilege', type=str, required=False, default='*.*:readwrite', help='privilege in form of "my_db.my_table:SELECT,UPDATE"')
+    parser.add_argument('--binlog',    type=int, required=False, choices=[0, 1], help='generate binlog for user created')
+
 
     parser.add_argument('--date-str',            action='store', help='date in form 2017_01_01. It is used in backup file name, or to specify which backup to use for restore. when absent, use date of today')
     parser.add_argument('--clean-after-restore', action='store_true', help='clean backup files after restore')
@@ -182,6 +191,14 @@ if __name__ == "__main__":
                             continue
                     print _repr
             return _out
+
+        elif cmd == 'user':
+            mb.create_user(args.username,
+                           args.password,
+                           host=args.host,
+                           privileges=[args.privilege.split(':', 1)],
+                           binlog=(args.binlog == 1))
+
         else:
             raise ValueError('unsupported command: ' + repr(cmd))
 
