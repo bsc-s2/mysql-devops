@@ -161,6 +161,11 @@ class MysqlBackup(object):
             if not alive:
                 self.stop_tmp_mysql(proc)
 
+    def query(self, sql):
+
+        pool = mysqlconnpool.make(self.mysql_addr)
+        return self.mysql_pool_query(pool, sql)
+
     def setup_group_replication(self):
 
         # replication:

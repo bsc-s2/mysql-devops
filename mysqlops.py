@@ -7,9 +7,10 @@ import argparse
 import logging
 import json
 
-from pykit import logutil
-from pykit import jobq
 from pykit import humannum
+from pykit import jobq
+from pykit import logutil
+from pykit import utfjson
 
 import mysqlbackup
 
@@ -36,6 +37,7 @@ if __name__ == "__main__":
         'replication_diff',
         'restore',
         'restore_from_backup',
+        'query',
         'setup_replication',
         'setup_group_replication',
         'table_size',
@@ -47,6 +49,9 @@ if __name__ == "__main__":
     parser.add_argument('--full',      action='store_true', required=False,  help='do not reduce any info when display')
     parser.add_argument('--size',      type=str, required=False,  help='specify size filter expression e.g.: ">10M"')
     parser.add_argument('--sortby',    type=str, required=False,  choices=['free', 'total', 'used'], help='sort by')
+
+    # for command query
+    parser.add_argument('--sql',       type=str, required=False,  help='sql in string')
 
     # options for command 'user'
     parser.add_argument('--username',  type=str, required=True,  help='user name to create')
@@ -141,6 +146,15 @@ if __name__ == "__main__":
 
         elif cmd == 'optimize':
             mb.optimize_tables(args.db)
+
+        elif cmd == 'query':
+            rst = mb.query(args.sql)
+
+            def _out():
+                for line in rst:
+                    print utfjson.dump(line)
+
+            return _out
 
         elif cmd == 'replication_diff':
             rst = mb.diff_replication()
