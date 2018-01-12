@@ -32,6 +32,8 @@ if __name__ == "__main__":
     parser.add_argument('--cmd',       type=str, required=True,  choices=[
         'backup',
         'catchup',
+        'group_replication_setup_channel',
+        'group_replication_bootstrap',
         'make_mycnf',
         'optimize',
         'replication_diff',
@@ -39,7 +41,6 @@ if __name__ == "__main__":
         'restore_from_backup',
         'query',
         'setup_replication',
-        'setup_group_replication',
         'table_size',
         'user',
     ], help='command to run')
@@ -121,8 +122,10 @@ if __name__ == "__main__":
             mb.backup()
         elif cmd == 'setup_replication':
             mb.setup_replication()
-        elif cmd == 'setup_group_replication':
-            mb.setup_group_replication()
+        elif cmd == 'group_replication_bootstrap':
+            mb.group_replication_bootstrap()
+        elif cmd == 'group_replication_setup_channel':
+            mb.group_replication_setup_channel()
 
         elif cmd == 'restore':
             if mb.has_data_dir():

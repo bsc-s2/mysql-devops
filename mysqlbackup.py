@@ -166,7 +166,20 @@ class MysqlBackup(object):
         pool = mysqlconnpool.make(self.mysql_addr)
         return self.mysql_pool_query(pool, sql)
 
-    def setup_group_replication(self):
+    def group_replication_bootstrap(self):
+
+        pool = mysqlconnpool.make(self.mysql_addr)
+
+        sqls = (
+            "SET GLOBAL group_replication_bootstrap_group=ON",
+            "START GROUP_REPLICATION",
+            "SET GLOBAL group_replication_bootstrap_group=OFF",
+        )
+
+        for sql in sqls:
+            self.mysql_pool_query(pool, sql)
+
+    def group_replication_setup_channel(self):
 
         # replication:
         #     user:       "{{ mysql_master_user }}"
