@@ -55,8 +55,8 @@ if __name__ == "__main__":
     parser.add_argument('--sql',       type=str, required=False,  help='sql in string')
 
     # options for command 'user'
-    parser.add_argument('--username',  type=str, required=True,  help='user name to create')
-    parser.add_argument('--password',  type=str, required=True,  help='login password')
+    parser.add_argument('--username',  type=str, required=False,  help='user name to create')
+    parser.add_argument('--password',  type=str, required=False,  help='login password')
     parser.add_argument('--host',      type=str, required=False, default='%', help='user host')
     parser.add_argument('--privilege', type=str, required=False, default='*.*:readwrite', help='privilege in form of "my_db.my_table:SELECT,UPDATE"')
     parser.add_argument('--binlog',    type=int, required=False, choices=[0, 1], help='generate binlog for user created')
