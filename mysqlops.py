@@ -37,6 +37,7 @@ if __name__ == "__main__":
         'restore',
         'restore_from_backup',
         'setup_replication',
+        'setup_group_replication',
         'table_size',
         'user',
     ], help='command to run')
@@ -115,6 +116,8 @@ if __name__ == "__main__":
             mb.backup()
         elif cmd == 'setup_replication':
             mb.setup_replication()
+        elif cmd == 'setup_group_replication':
+            mb.setup_group_replication()
 
         elif cmd == 'restore':
             if mb.has_data_dir():

@@ -161,6 +161,37 @@ class MysqlBackup(object):
             if not alive:
                 self.stop_tmp_mysql(proc)
 
+    def setup_group_replication(self):
+
+        # replication:
+        #     user:       "{{ mysql_master_user }}"
+        #     password:   "{{ mysql_master_password }}"
+        #     source: [...]
+
+        rpl = self.bkp_conf['replication']
+
+        alive = self.is_instance_alive()
+        proc = None
+
+        if not alive:
+            proc = self.start_tmp_mysql()
+
+        try:
+            pool = mysqlconnpool.make(self.mysql_addr)
+
+            sql = (
+                'CHANGE MASTER TO'
+                '      MASTER_USER="{user}"'
+                '    , MASTER_PASSWORD="{password}"'
+                ' FOR CHANNEL "group_replication_recovery"'
+            ).format(**rpl)
+
+            self.mysql_pool_query(pool, sql)
+
+        finally:
+            if not alive:
+                self.stop_tmp_mysql(proc)
+
     def setup_replication(self):
 
         # replication:
