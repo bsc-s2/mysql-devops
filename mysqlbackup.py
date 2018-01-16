@@ -735,6 +735,7 @@ class MysqlBackup(object):
                             '    --exclude-gtids="{gtid_set_str}"'
                             '    {bfn}'
                             ' | bin/mysql --socket={mysql_socket} '
+                            + self._get_arg_password()
                             ),
                            bfn=bfn,
                            gtid_set_str=mysqlutil.gtidset.dump(gtid_set, line_break=''),
