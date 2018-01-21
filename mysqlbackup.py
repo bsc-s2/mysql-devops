@@ -223,13 +223,47 @@ class MysqlBackup(object):
         #         port:
         #         id:
 
-        rpl = self.bkp_conf['replication']
-
         alive = self.is_instance_alive()
         proc = None
 
         if not alive:
             proc = self.start_tmp_mysql()
+
+        try:
+            pool = mysqlconnpool.make(self.mysql_addr)
+
+            if self.bkp_conf['replication'].get('group_replication') == 1:
+                self._group_replication_reset_relay(pool)
+                if alive:
+                    self.mysql_pool_query(pool, 'START group_replication')
+            else:
+                self._slave_reset(pool)
+                if alive:
+                    self.mysql_pool_query(pool, 'START SLAVE')
+
+        finally:
+            if not alive:
+                self.stop_tmp_mysql(proc)
+
+    def _group_replication_reset_relay(self, pool):
+
+        sqls = (
+            'SET GLOBAL master_info_repository = "TABLE"',
+            'SET GLOBAL relay_log_info_repository = "TABLE"',
+
+            'RESET SLAVE ALL FOR CHANNEL "group_replication_applier"',
+            'RESET SLAVE ALL FOR CHANNEL "group_replication_recovery"',
+            'RESET SLAVE ALL FOR CHANNEL ""',
+            'RESET SLAVE ALL',
+        )
+
+        for sql in sqls:
+            self.mysql_pool_query(pool, sql)
+
+
+    def _slave_reset(self, pool):
+
+        rpl = self.bkp_conf['replication']
 
         sqls_reset = [
             'STOP SLAVE',
@@ -240,34 +274,25 @@ class MysqlBackup(object):
             'RESET SLAVE ALL FOR CHANNEL ""',
             'RESET SLAVE ALL',
         ]
+        for sql in sqls_reset:
+            self.mysql_pool_query(pool, sql)
+            time.sleep(1)
 
-        try:
-            pool = mysqlconnpool.make(self.mysql_addr)
-            for sql in sqls_reset:
-                self.mysql_pool_query(pool, sql)
-                time.sleep(1)
+        for src in rpl['source']:
+            kwarg = copy.deepcopy(rpl)
+            kwarg.update(src)
+            sql = (
+                'CHANGE MASTER TO'
+                '      MASTER_HOST="{host}"'
+                '    , MASTER_PORT={port}'
+                '    , MASTER_USER="{user}"'
+                '    , MASTER_PASSWORD="{password}"'
+                '    , MASTER_AUTO_POSITION=1'
+                ' FOR CHANNEL "master-{id}"'
+            ).format(**kwarg)
 
-            for src in rpl['source']:
-                kwarg = copy.deepcopy(rpl)
-                kwarg.update(src)
-                sql = (
-                    'CHANGE MASTER TO'
-                    '      MASTER_HOST="{host}"'
-                    '    , MASTER_PORT={port}'
-                    '    , MASTER_USER="{user}"'
-                    '    , MASTER_PASSWORD="{password}"'
-                    '    , MASTER_AUTO_POSITION=1'
-                    ' FOR CHANNEL "master-{id}"'
-                ).format(**kwarg)
+            self.mysql_pool_query(pool, sql)
 
-                self.mysql_pool_query(pool, sql)
-
-            if alive:
-                self.mysql_pool_query(pool, 'START SLAVE')
-
-        finally:
-            if not alive:
-                self.stop_tmp_mysql(proc)
 
     def diff_replication(self):
 
@@ -564,6 +589,11 @@ class MysqlBackup(object):
         self.info("restore OK")
 
     def catchup(self):
+
+        if self.bkp_conf['replication'].get('group_replication') == 1:
+            self.info('configured as group replication, do not need to manually catchup')
+            return
+
         self.info_r('catchup start...')
         self.make_runtime_my_cnf()
 
@@ -856,6 +886,9 @@ class MysqlBackup(object):
     def start_tmp_mysql(self, opts=()):
 
         self.info("start mysqld ...")
+
+        # always disable group replication auto-start during restoring
+        opts = list(opts) + ['--loose-group-replication-start-on-boot=off']
 
         cmd = self.render(
             './bin/mysqld --defaults-file={mysql_my_cnf} ' + (' '.join(opts)))
