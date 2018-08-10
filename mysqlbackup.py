@@ -23,7 +23,11 @@ import time
 import boto3
 import MySQLdb
 import yaml
+
 from boto3.s3.transfer import TransferConfig
+from botocore.exceptions import ClientError
+from boto3.exceptions import S3UploadFailedError
+
 from botocore.client import Config
 
 from pykit import mysqlconnpool
@@ -453,15 +457,16 @@ class MysqlBackup(object):
 
         self.info("backup ...")
 
-        self.shell_run('remove old backup {backup_data_dir} {backup_binlog_dir} {backup_tgz_des3}',
-                       'rm -rf {backup_data_dir} {backup_binlog_dir} {backup_tgz_des3}')
+        self.remove_backup_file()
 
-        self.backup_data()
-        self.backup_binlog()
-        self.calc_checksum()
-        self.upload_backup()
-
-        self.info("backup OK")
+        try:
+            self.backup_data()
+            self.backup_binlog()
+            self.calc_checksum()
+            self.upload_backup()
+            self.info_r('backup to s3://{s3_bucket}/{s3_key} OK')
+        finally:
+            self.remove_backup_file()
 
     def backup_data(self):
 
@@ -580,22 +585,19 @@ class MysqlBackup(object):
                         )
             except ClientError as ee:
                 self.error(repr(ee) + 'backup file: {backup_tgz_des3} not found in s2 cloud')
-                raise ee
+                raise
 
             if resp['ResponseMetadata']['HTTPStatusCode'] == 200:
                 self.info('backup file: {backup_tgz_des3} already in s2 cloud')
             else:
                 self.error(repr(e) + 'get backup file: {backup_tgz_des3} error')
-                raise e
+                raise
 
-        finally:
-            self.shell_run('remove backup {backup_tgz_des3}',
-                           'rm -rf {backup_tgz_des3}')
-            self.shell_run('remove backup {backup_data_dir} {backup_binlog_dir}',
-                           'rm -rf {backup_data_dir} {backup_binlog_dir}')
 
-        self.info_r('backup to s3://{s3_bucket}/{s3_key} OK')
+    def remove_backup_file(self):
 
+            self.shell_run('remove backup {backup_tgz_des3} {backup_data_dir} {backup_binlog_dir}',
+                           'rm -rf {backup_tgz_des3} {backup_data_dir} {backup_binlog_dir}')
 
     def restore(self):
 
