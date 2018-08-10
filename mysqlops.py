@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
 
-    rootlogger = logutil.make_logger(base_dir='/tmp',
+    rootlogger = logutil.make_logger(base_dir='/var/log',
                                      log_fn=logutil.get_root_log_fn(),
                                      level=logging.DEBUG)
     logutil.add_std_handler(rootlogger, stream=sys.stdout)
