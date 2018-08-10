@@ -460,8 +460,6 @@ class MysqlBackup(object):
         self.backup_binlog()
         self.calc_checksum()
         self.upload_backup()
-        self.shell_run('remove backup {backup_data_dir} {backup_binlog_dir}',
-                       'rm -rf {backup_data_dir} {backup_binlog_dir}')
 
         self.info("backup OK")
 
@@ -562,17 +560,21 @@ class MysqlBackup(object):
         # boto adds Content-MD5 automatically
         extra_args = {'Metadata': self.bkp_conf['backup_tgz_des3_meta']}
 
-        boto_put(bc,
-                 self.render('{backup_tgz_des3}'),
-                 self.render('{s3_bucket}'),
-                 self.render('{s3_key}'),
-                 extra_args
-                 )
+        try:
+            boto_put(bc,
+                     self.render('{backup_tgz_des3}'),
+                     self.render('{s3_bucket}'),
+                     self.render('{s3_key}'),
+                     extra_args
+                     )
+        finally:
+            self.shell_run('remove backup {backup_tgz_des3}',
+                           'rm -rf {backup_tgz_des3}')
+            self.shell_run('remove backup {backup_data_dir} {backup_binlog_dir}',
+                           'rm -rf {backup_data_dir} {backup_binlog_dir}')
 
         self.info_r('backup to s3://{s3_bucket}/{s3_key} OK')
 
-        self.shell_run('remove backup {backup_tgz_des3}',
-                       'rm -rf {backup_tgz_des3}')
 
     def restore(self):
 
