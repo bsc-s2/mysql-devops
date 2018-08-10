@@ -567,6 +567,27 @@ class MysqlBackup(object):
                      self.render('{s3_key}'),
                      extra_args
                      )
+
+        except S3UploadFailedError as e:
+
+            self.info(repr(e) + 'while upload {backup_tgz_des3} to s2 cloud')
+
+            try:
+                resp = boto_head(bc,
+                        self.reader('{backup_tgz_des3}'),
+                        self.render('{s3_bucket}'),
+                        self.render('{s3_key}')
+                        )
+            except ClientError as ee:
+                self.error(repr(ee) + 'backup file: {backup_tgz_des3} not found in s2 cloud')
+                raise ee
+
+            if resp['ResponseMetadata']['HTTPStatusCode'] == 200:
+                self.info('backup file: {backup_tgz_des3} already in s2 cloud')
+            else:
+                self.error(repr(e) + 'get backup file: {backup_tgz_des3} error')
+                raise e
+
         finally:
             self.shell_run('remove backup {backup_tgz_des3}',
                            'rm -rf {backup_tgz_des3}')
@@ -1215,6 +1236,16 @@ def boto_put(cli, fpath, bucket_name, key_name, extra_args):
         Config=config,
         ExtraArgs=extra_args,
     )
+
+
+def boto_head(cli, bucket_name, key_name):
+
+    resp = cli.head_object(
+            Bucket=bucket_name,
+            Key=key_name,
+            )
+
+    return resp
 
 
 def boto_get(cli, fpath, bucket_name, key_name):
