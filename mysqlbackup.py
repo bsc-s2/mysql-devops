@@ -457,7 +457,8 @@ class MysqlBackup(object):
 
         self.info("backup ...")
 
-        self.remove_backup_file()
+        self.remove_backup(
+                'remove old backup {backup_tgz_des3} {backup_data_dir} {backup_binlog_dir}')
 
         try:
             self.backup_data()
@@ -466,7 +467,9 @@ class MysqlBackup(object):
             self.upload_backup()
             self.info_r('backup to s3://{s3_bucket}/{s3_key} OK')
         finally:
-            self.remove_backup_file()
+            self.remove_backup(
+                    'remove backup {backup_tgz_des3} {backup_data_dir} {backup_binlog_dir}')
+
 
     def backup_data(self):
 
@@ -579,7 +582,6 @@ class MysqlBackup(object):
 
             try:
                 resp = boto_head(bc,
-                        self.reader('{backup_tgz_des3}'),
                         self.render('{s3_bucket}'),
                         self.render('{s3_key}')
                         )
@@ -591,13 +593,14 @@ class MysqlBackup(object):
                 self.info('backup file: {backup_tgz_des3} already in s2 cloud')
             else:
                 self.error(repr(e) + 'get backup file: {backup_tgz_des3} error')
-                raise
+                raise S3UploadFailedError(repr(e) + 'while upload backup file failed')
 
 
-    def remove_backup_file(self):
+    def remove_backup(self, cmd_info):
 
-            self.shell_run('remove backup {backup_tgz_des3} {backup_data_dir} {backup_binlog_dir}',
-                           'rm -rf {backup_tgz_des3} {backup_data_dir} {backup_binlog_dir}')
+        self.shell_run(cmd_info,
+                'rm -rf {backup_tgz_des3} {backup_data_dir} {backup_binlog_dir}')
+
 
     def restore(self):
 
