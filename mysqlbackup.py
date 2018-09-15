@@ -826,7 +826,7 @@ class MysqlBackup(object):
         self.setup_replication()
 
         # wait for binlog-sync to start
-        time.sleep(1)
+        time.sleep(5)
         self.wait_remote_binlog()
 
         self.stop_tmp_mysql(proc)
