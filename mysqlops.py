@@ -62,6 +62,8 @@ if __name__ == "__main__":
     parser.add_argument('--binlog',    type=int, required=False, choices=[0, 1], help='generate binlog for user created')
 
 
+    # options for backup/restore commands
+    parser.add_argument('--encrypt',   type=str, required=False, default='des', help='encrypt')
     parser.add_argument('--date-str',            action='store', help='date in form 2017_01_01. It is used in backup file name, or to specify which backup to use for restore. when absent, use date of today')
     parser.add_argument('--clean-after-restore', action='store_true', help='clean backup files after restore')
 
