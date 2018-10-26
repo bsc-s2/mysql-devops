@@ -32,6 +32,7 @@ from botocore.client import Config
 
 from pykit import mysqlconnpool
 from pykit import mysqlutil
+from pykit import timeutil
 from pykit import logutil
 from pykit import humannum
 
@@ -461,6 +462,7 @@ class MysqlBackup(object):
                 'remove old backup {backup_tgz_des3} {backup_data_dir} {backup_binlog_dir}')
 
         try:
+            self.clean_binlog()
             self.backup_data()
             self.backup_binlog()
             self.calc_checksum()
@@ -470,6 +472,18 @@ class MysqlBackup(object):
             self.remove_backup(
                     'remove backup {backup_tgz_des3} {backup_data_dir} {backup_binlog_dir}')
 
+
+    def clean_binlog(self, before_days=1):
+
+        ts = timeutil.ts()
+        ts = ts - 86400 * before_days
+        dt = timeutil.format_ts(ts, 'daily')
+
+        pool = mysqlconnpool.make(self.mysql_addr)
+
+        self.mysql_pool_query(pool,
+                              'PURGE BINARY LOGS BEFORE "{dt} 00:00:00"'.format(
+                                      dt=dt))
 
     def backup_data(self):
 
