@@ -1,0 +1,36 @@
+Confs:
+    -
+        WriteWorkerCnt: 2
+
+        SourceConn:
+            Addr: 106.14.46.83:3308
+            Host: 106.14.46.83
+            Port: "3308"
+            User: root
+            Password: Password
+            DBName: db
+
+        DBConfig:
+            4491:
+                Addr: 139.224.229.252:4491
+                Host: 139.224.229.252
+                Port: "4491"
+                User: root
+                Password: Password
+                DBName: db
+
+        Shards:
+            -
+                From: [1090000000000000096, u, 1.jpg, 0]
+                Table: key_1090000000000000096_u_1.jpg
+                DBPort: "4491"
+
+        TableName: key_0000000000000000000__
+        TableField: ["bucket_id", "scope", "key", "ts", "is_del", "owner", "acl", "sha1", "ver", "md5", "crc32", "size", "file_meta", "group_id", "origo", "expires", "multipart"]
+        TableShard: ["bucket_id" , "scope", "key", "ts"]
+        TableIndex: ["bucket_id" , "scope", "key", "ts"]
+
+        GTIDSet: bad0552d-cb43-11e6-a6ef-00163e0e31a0:1-20482
+        BinlogFile: mysql-bin.000004
+        BinlogPos: 4
+        TickCnt: 40
