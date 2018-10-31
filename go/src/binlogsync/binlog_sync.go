@@ -44,14 +44,20 @@ type WriteEvent struct {
 }
 
 type OutStatus struct {
-	err          error
-	routineIndex int
-	logPos       int32
+	err            error
+	goroutineIndex int
+	logPos         int32
 }
 
 type Config struct {
-	ChannelCapacity  int
-	WriteThreadCount int
+	// this config used to parse `config.json`, format detail is in the example config file
+	// `config.json`
+
+	// WriteThreadCnt specifies how many goroutine used to execute sql statement
+	WriteThreadCnt int
+
+	// ChannelCapacity specifies the event buffer capacity of one write goroutine
+	ChannelCapacity int
 
 	SourceConn Connection
 
@@ -69,14 +75,15 @@ type Config struct {
 	BinlogFile string
 	BinlogPos  int32
 
+	// TickCnt specifies every `TickCnt` rows synced got 1 status report
 	TickCnt int64
 }
 
-var logFile *os.File
-
-var mutex sync.Mutex
-
 var (
+	logFile *os.File
+
+	mutex sync.Mutex
+
 	FileLog  *log.Logger
 	ShellLog *log.Logger
 )
@@ -207,9 +214,9 @@ func writeToDB(chIdx int, inCh chan *WriteEvent, outCh chan *OutStatus) {
 		}
 
 		stat := &OutStatus{
-			err:          err,
-			routineIndex: chIdx,
-			logPos:       int32(ev.event.Header.LogPos),
+			err:            err,
+			goroutineIndex: chIdx,
+			logPos:         int32(ev.event.Header.LogPos),
 		}
 
 		FileLog.Printf("routin index: %d, event position: %d\n", chIdx, ev.event.Header.LogPos)
@@ -323,10 +330,10 @@ func main() {
 		ShellLog.Panicf("read config file failed: %v\n", err)
 	}
 
-	var writeChs = make([]chan *WriteEvent, conf.WriteThreadCount)
-	var countCh = make(chan *OutStatus, conf.WriteThreadCount*conf.ChannelCapacity)
+	var writeChs = make([]chan *WriteEvent, conf.WriteThreadCnt)
+	var countCh = make(chan *OutStatus, conf.WriteThreadCnt*conf.ChannelCapacity)
 
-	for i := 0; i < conf.WriteThreadCount; i++ {
+	for i := 0; i < conf.WriteThreadCnt; i++ {
 		writeCh := make(chan *WriteEvent, conf.ChannelCapacity)
 		writeChs[i] = writeCh
 		go writeToDB(i, writeCh, countCh)
@@ -373,12 +380,12 @@ func main() {
 			}
 		}
 
-		rowSha1, err := calcHashToInt64([]byte(strings.Join(indexValues, "")))
+		rowHash, err := calcHashToInt64([]byte(strings.Join(indexValues, "")))
 		if err != nil {
 			ShellLog.Panicf("calculate hash failed: %v", err)
 		}
 
-		chIdx := rowSha1 % int64(conf.WriteThreadCount)
+		chIdx := rowHash % int64(conf.WriteThreadCnt)
 		writeChs[chIdx] <- writeEV
 	}
 }
@@ -389,7 +396,7 @@ func makeWriteEvent(ev *replication.BinlogEvent) *WriteEvent {
 
 	rowEv, ok := ev.Event.(*replication.RowsEvent)
 	if !ok {
-		FileLog.Printf("event is not a rows event\n")
+		FileLog.Printf("event is not a rows event, got: %v\n", ev.Header.EventType)
 		return nil
 	}
 
