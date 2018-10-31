@@ -1,6 +1,6 @@
 {
-    "ChCap": 20,
-    "ChCnt": 2,
+    "ChannelCapacity": 20,
+    "WriteThreadCount": 2,
 
     "SourceConn": {
             "Addr": "106.14.46.83:3308",
@@ -36,6 +36,7 @@
     "TableShard": [ "bucket_id" , "scope", "key"],
     "TableIndex": [ "bucket_id" , "scope", "key"],
 
+    "GTID": "",
     "BinlogFile": "mysql-bin.000004",
     "BinlogPos": 4,
     "TickCnt": 40

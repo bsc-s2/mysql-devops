@@ -46,12 +46,12 @@ type WriteEvent struct {
 type OutStatus struct {
 	err          error
 	routineIndex int
-	logPos       uint32
+	logPos       int32
 }
 
 type Config struct {
-	ChCap int
-	ChCnt int
+	ChannelCapacity  int
+	WriteThreadCount int
 
 	SourceConn Connection
 
@@ -63,8 +63,11 @@ type Config struct {
 	TableShard []string
 	TableIndex []string
 
+	// if set GTID, binlog file and pos will be ignored
+	GTID string
+
 	BinlogFile string
-	BinlogPos  uint32
+	BinlogPos  int32
 
 	TickCnt int64
 }
@@ -111,15 +114,14 @@ func validRow(srcRow []interface{}) map[string]string {
 	return row
 }
 
-func newBinlogReader(conn *Connection, binlogFile string, binlogPos uint32, serverID uint32) (*replication.BinlogStreamer, error) {
-
+func newBinlogSyncer(conn *Connection, serverID int32) (*replication.BinlogSyncer, error) {
 	port, err := strconv.ParseInt(conn.Port, 10, 16)
 	if err != nil {
 		return nil, err
 	}
 
 	binlogCfg := replication.BinlogSyncerConfig{
-		ServerID: serverID,
+		ServerID: uint32(serverID),
 		Flavor:   "mysql",
 		Host:     conn.Host,
 		Port:     uint16(port),
@@ -127,9 +129,36 @@ func newBinlogReader(conn *Connection, binlogFile string, binlogPos uint32, serv
 		Password: conn.Password,
 	}
 
-	syncer := replication.NewBinlogSyncer(binlogCfg)
+	return replication.NewBinlogSyncer(binlogCfg), nil
+}
 
-	streamer, err := syncer.StartSync(mysql.Position{binlogFile, binlogPos})
+func newBinlogReaderByPosition(conn *Connection, binlogFile string, binlogPos int32, serverID int32) (*replication.BinlogStreamer, error) {
+
+	syncer, err := newBinlogSyncer(conn, serverID)
+	if err != nil {
+		return nil, err
+	}
+
+	streamer, err := syncer.StartSync(mysql.Position{binlogFile, uint32(binlogPos)})
+	if err != nil {
+		return nil, err
+	}
+
+	return streamer, nil
+}
+
+func newBinlogReaderByGTID(conn *Connection, GTID string, serverID int32) (*replication.BinlogStreamer, error) {
+	syncer, err := newBinlogSyncer(conn, serverID)
+	if err != nil {
+		return nil, err
+	}
+
+	gtidSet, err := mysql.ParseMysqlGTIDSet(GTID)
+	if err != nil {
+		return nil, err
+	}
+
+	streamer, err := syncer.StartSyncGTID(gtidSet)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +209,7 @@ func writeToDB(chIdx int, inCh chan *WriteEvent, outCh chan *OutStatus) {
 		stat := &OutStatus{
 			err:          err,
 			routineIndex: chIdx,
-			logPos:       ev.event.Header.LogPos,
+			logPos:       int32(ev.event.Header.LogPos),
 		}
 
 		FileLog.Printf("routin index: %d, event position: %d\n", chIdx, ev.event.Header.LogPos)
@@ -294,18 +323,24 @@ func main() {
 		ShellLog.Panicf("read config file failed: %v\n", err)
 	}
 
-	var writeChs = make([]chan *WriteEvent, conf.ChCnt)
-	var countCh = make(chan *OutStatus, conf.ChCnt*conf.ChCap)
+	var writeChs = make([]chan *WriteEvent, conf.WriteThreadCount)
+	var countCh = make(chan *OutStatus, conf.WriteThreadCount*conf.ChannelCapacity)
 
-	for i := 0; i < conf.ChCnt; i++ {
-		writeCh := make(chan *WriteEvent, conf.ChCap)
+	for i := 0; i < conf.WriteThreadCount; i++ {
+		writeCh := make(chan *WriteEvent, conf.ChannelCapacity)
 		writeChs[i] = writeCh
 		go writeToDB(i, writeCh, countCh)
 	}
 
 	go collector(countCh)
 
-	binlogReader, err := newBinlogReader(&conf.SourceConn, conf.BinlogFile, conf.BinlogPos, 9999)
+	var binlogReader *replication.BinlogStreamer
+	if conf.GTID != "" {
+		binlogReader, err = newBinlogReaderByGTID(&conf.SourceConn, conf.GTID, 9999)
+	} else {
+		binlogReader, err = newBinlogReaderByPosition(&conf.SourceConn, conf.BinlogFile, conf.BinlogPos, 9999)
+	}
+
 	if err != nil {
 		ShellLog.Panicf("make binlog reader failed: %v\n", err)
 	}
@@ -343,7 +378,7 @@ func main() {
 			ShellLog.Panicf("calculate hash failed: %v", err)
 		}
 
-		chIdx := rowSha1 % int64(conf.ChCnt)
+		chIdx := rowSha1 % int64(conf.WriteThreadCount)
 		writeChs[chIdx] <- writeEV
 	}
 }
