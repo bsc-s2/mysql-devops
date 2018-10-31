@@ -1,26 +1,23 @@
 package main
 
 import (
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"hash/fnv"
 	"io/ioutil"
-	"strconv"
 	"strings"
 )
 
-func calcHashToInt64(src []byte) (int64, error) {
-	h := sha256.New()
-	h.Write(src)
-
-	hex_str := fmt.Sprintf("%x", h.Sum(nil))
-
-	num, err := strconv.ParseInt(hex_str[:8], 16, 64)
-	if err != nil {
-		return 0, err
+func hashStringSliceToInt32(src []string) (int64, error) {
+	h := fnv.New32()
+	for _, s := range src {
+		_, err := h.Write([]byte(s))
+		if err != nil {
+			return 0, err
+		}
 	}
-	return num, nil
+
+	return int64(h.Sum32()), nil
 }
 
 func compareStringSlice(a, b []string) (int, error) {

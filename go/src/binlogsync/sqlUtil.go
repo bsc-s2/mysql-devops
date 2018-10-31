@@ -13,7 +13,7 @@ func makeUpdateSql(table string, idxField, idxValue, tbField, tbValue []string) 
 	var limitClause string
 	var tableClause string
 
-	tableClause = quote(table, "`")
+	tableClause = quoteString(table, "`")
 	setClause = makeSqlCondition(tbField, tbValue, "=", ", ")
 	whereClause = makeWhereClause(idxField, idxValue)
 	limitClause = "LIMIT 1"
@@ -26,17 +26,17 @@ func makeInsertSql(table string, tbField, tbValue []string) string {
 	var valClause string
 	var tableClause string
 
-	tableClause = quote(table, "`")
+	tableClause = quoteString(table, "`")
 
 	fld := make([]string, len(tbField))
 	val := make([]string, len(tbValue))
 
 	for i := 0; i < len(tbField); i++ {
-		fld[i] = quote(tbField[i], "`")
+		fld[i] = quoteString(tbField[i], "`")
 		val[i] = "\"" + mysql.Escape(tbValue[i]) + "\""
 	}
 
-	FileLog.Printf("table field: %v, value: %v\n", fld, val)
+	fileLog.Printf("table field: %v, value: %v\n", fld, val)
 
 	fldClause = "(" + strings.Join(fld, ", ") + ")"
 	valClause = "(" + strings.Join(val, ", ") + ")"
@@ -49,7 +49,7 @@ func makeDeleteSql(table string, idxField, idxValue []string) string {
 	var limitClause string
 	var tableClause string
 
-	tableClause = quote(table, "`")
+	tableClause = quoteString(table, "`")
 
 	whereClause = makeWhereClause(idxField, idxValue)
 	limitClause = "LIMIT 1"
@@ -65,13 +65,14 @@ func makeSqlCondition(fields, values []string, operator, formatter string) strin
 	conds := make([]string, len(fields))
 
 	for i, k := range fields {
-		conds[i] = fmt.Sprintf("%s%s%s", quote(k, "`"), operator, "\""+mysql.Escape(values[i])+"\"")
+		conds[i] = fmt.Sprintf("%s%s%s", quoteString(k, "`"), operator, "\""+mysql.Escape(values[i])+"\"")
 	}
 
 	return strings.Join(conds, formatter)
 }
 
-func quote(src, quote string) string {
-	rst := strings.Replace(src, quote, "\\"+quote, -1)
+func quoteString(src, quote string) string {
+	safeQuote := strings.Replace(quote, "\\", "\\\\", -1)
+	rst := strings.Replace(src, quote, "\\"+safeQuote, -1)
 	return quote + rst + quote
 }

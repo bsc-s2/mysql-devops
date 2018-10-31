@@ -6,8 +6,8 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -54,10 +54,7 @@ type Config struct {
 	// `config.json`
 
 	// WriteThreadCnt specifies how many goroutine used to execute sql statement
-	WriteThreadCnt int
-
-	// ChannelCapacity specifies the event buffer capacity of one write goroutine
-	ChannelCapacity int
+	WriteWorkerCnt int
 
 	SourceConn Connection
 
@@ -80,18 +77,21 @@ type Config struct {
 }
 
 var (
-	logFile *os.File
+	mutex *sync.Mutex
 
-	mutex sync.Mutex
+	wg sync.WaitGroup
 
-	FileLog  *log.Logger
-	ShellLog *log.Logger
+	fileLog  *log.Logger
+	shellLog *log.Logger
 )
 
-var dbPool = make(map[string]*client.Conn)
-var conf = Config{}
-var logFileName = "binlog_sync.out"
-var confName = "./config.json"
+var (
+	dbPool          = make(map[string]*client.Conn)
+	conf            = Config{}
+	logFileName     = "binlog_sync.out"
+	confName        = "./config.json"
+	channelCapacity = 10240
+)
 
 func validRow(srcRow []interface{}) map[string]string {
 	// the first column `id` should not put in new rowValue
@@ -175,6 +175,11 @@ func newBinlogReaderByGTID(conn *Connection, GTID string, serverID int32) (*repl
 
 func writeToDB(chIdx int, inCh chan *WriteEvent, outCh chan *OutStatus) {
 	for ev := range inCh {
+
+		if ev.event.Header.EventType == replication.ROTATE_EVENT {
+			continue
+		}
+
 		mutex.Lock()
 		ev.dbInfo = getEventConnection(ev.after)
 		mutex.Unlock()
@@ -189,7 +194,7 @@ func writeToDB(chIdx int, inCh chan *WriteEvent, outCh chan *OutStatus) {
 		var sql string
 		evType := ev.event.Header.EventType
 
-		FileLog.Printf("routin index: %d, before: %v, after: %v, event type: %v\n", chIdx, ev.before, ev.after, evType)
+		fileLog.Printf("routin index: %d, before: %v, after: %v, event type: %v\n", chIdx, ev.before, ev.after, evType)
 
 		if evType == replication.UPDATE_ROWS_EVENTv2 || evType == replication.UPDATE_ROWS_EVENTv1 || evType == replication.UPDATE_ROWS_EVENTv0 {
 			sql = makeUpdateSql(ev.dbInfo.Shard.Table, conf.TableIndex, index, conf.TableField, value)
@@ -204,13 +209,13 @@ func writeToDB(chIdx int, inCh chan *WriteEvent, outCh chan *OutStatus) {
 			continue
 		}
 
-		FileLog.Printf("routin index: %d, get sql statement: %v", chIdx, sql)
+		fileLog.Printf("routin index: %d, get sql statement: %v", chIdx, sql)
 
 		mutex.Lock()
 		_, err := ev.dbInfo.Conn.Execute(sql)
 		mutex.Unlock()
 		if err != nil {
-			FileLog.Printf("Execute error: %v\n", err)
+			fileLog.Printf("Execute error: %v\n", err)
 		}
 
 		stat := &OutStatus{
@@ -219,7 +224,7 @@ func writeToDB(chIdx int, inCh chan *WriteEvent, outCh chan *OutStatus) {
 			logPos:         int32(ev.event.Header.LogPos),
 		}
 
-		FileLog.Printf("routin index: %d, event position: %d\n", chIdx, ev.event.Header.LogPos)
+		fileLog.Printf("routin index: %d, event position: %d\n", chIdx, ev.event.Header.LogPos)
 		outCh <- stat
 	}
 }
@@ -239,16 +244,16 @@ func collector(inCh chan *OutStatus) {
 
 		if rowCount%conf.TickCnt == 0 {
 
-			ShellLog.Printf("========= sync stat =========\n")
+			shellLog.Printf("========= sync stat =========\n")
 
-			ShellLog.Printf("has synced: %d rows\n", rowCount)
-			ShellLog.Printf("has error: %d rows\n", errCount)
+			shellLog.Printf("has synced: %d rows\n", rowCount)
+			shellLog.Printf("has error: %d rows\n", errCount)
 			for k, v := range errTypes {
-				ShellLog.Printf("%s: %d rows\n", k, v)
+				shellLog.Printf("%s: %d rows\n", k, v)
 			}
 
-			ShellLog.Printf("sync rate: %.3f rows per second\n", float64(conf.TickCnt)/time.Since(start).Seconds())
-			ShellLog.Printf("has synced log position: %d\n", outStat.logPos)
+			shellLog.Printf("sync rate: %.3f rows per second\n", float64(conf.TickCnt)/time.Since(start).Seconds())
+			shellLog.Printf("has synced log position: %d\n", outStat.logPos)
 
 			start = time.Now()
 		}
@@ -267,7 +272,7 @@ func getEventConnection(row map[string]string) *DBInfo {
 		addr := conf.DBAddrs[shard.DBPort]
 		conn, err := client.Connect(addr.Addr, addr.User, addr.Password, addr.DBName)
 		if err != nil {
-			FileLog.Panicf("get connection failed: %v\n", err)
+			fileLog.Panicf("get connection failed: %v\n", err)
 		}
 		dbPool[addr.Port] = conn
 	}
@@ -279,63 +284,57 @@ func getEventConnection(row map[string]string) *DBInfo {
 }
 
 func findShards(tbShards []string) *DBShard {
-	le := 0
-	ri := len(conf.Shards)
 
-	for le < ri {
-		i := (le + ri) / 2
+	//conf.Shards should be descending
+	i := sort.Search(len(conf.Shards), func(i int) bool {
 		shard := conf.Shards[i].From
-
 		rst, err := compareStringSlice(shard, tbShards)
 		if err != nil {
-			FileLog.Printf("conf is not valid, shard length not equal: %v\n", err)
-			return nil
+			fileLog.Panicf("conf is not valid, shard length not equal: %v\n", err)
 		}
 
-		if rst == 0 {
-			return &conf.Shards[i]
+		if rst <= 0 {
+			return true
 		}
+		return false
+	})
 
-		if rst < 0 {
-			le = i + 1
-		} else {
-			ri = i
-		}
+	if i >= 0 && i < len(conf.Shards) {
+		return &conf.Shards[i]
 	}
 
-	if ri >= 1 {
-		return &conf.Shards[ri-1]
-	}
-
-	return &conf.Shards[0]
+	fileLog.Panicf("can not find shard: index out of bound")
+	return nil
 }
 
 func main() {
 
 	// set log
-	ShellLog = log.New(os.Stdout, "", 0)
+	shellLog = log.New(os.Stdout, "", 0)
 
 	logFile, err := os.Create(logFileName)
 	if err != nil {
-		ShellLog.Panicf("create log file failed: %v\n", err)
+		shellLog.Panicf("create log file failed: %v\n", err)
 	}
 	defer logFile.Close()
-	FileLog = log.New(logFile, "", log.Ldate|log.Ltime|log.Lshortfile)
+	fileLog = log.New(logFile, "", log.Ldate|log.Ltime|log.Lshortfile)
 
 	// read config
 	jsonParser := NewJsonStruct()
 
 	err = jsonParser.Load(confName, &conf)
 	if err != nil {
-		ShellLog.Panicf("read config file failed: %v\n", err)
+		shellLog.Panicf("read config file failed: %v\n", err)
 	}
 
-	var writeChs = make([]chan *WriteEvent, conf.WriteThreadCnt)
-	var countCh = make(chan *OutStatus, conf.WriteThreadCnt*conf.ChannelCapacity)
+	var writeChs = make([]chan *WriteEvent, conf.WriteWorkerCnt)
+	var countCh = make(chan *OutStatus, conf.WriteWorkerCnt*channelCapacity)
 
-	for i := 0; i < conf.WriteThreadCnt; i++ {
-		writeCh := make(chan *WriteEvent, conf.ChannelCapacity)
+	for i := 0; i < conf.WriteWorkerCnt; i++ {
+		writeCh := make(chan *WriteEvent, channelCapacity)
 		writeChs[i] = writeCh
+
+		wg.Add(1)
 		go writeToDB(i, writeCh, countCh)
 	}
 
@@ -349,13 +348,13 @@ func main() {
 	}
 
 	if err != nil {
-		ShellLog.Panicf("make binlog reader failed: %v\n", err)
+		shellLog.Panicf("make binlog reader failed: %v\n", err)
 	}
 
 	for {
 		ev, err := binlogReader.GetEvent(context.Background())
 		if err != nil {
-			ShellLog.Panicf("get event failed: %v\n", err)
+			shellLog.Panicf("get event failed: %v\n", err)
 		}
 
 		if ev.Header.EventType == replication.ROTATE_EVENT {
@@ -380,14 +379,16 @@ func main() {
 			}
 		}
 
-		rowHash, err := calcHashToInt64([]byte(strings.Join(indexValues, "")))
+		rowHash, err := hashStringSliceToInt32(indexValues)
 		if err != nil {
-			ShellLog.Panicf("calculate hash failed: %v", err)
+			shellLog.Panicf("calculate hash failed: %v", err)
 		}
 
-		chIdx := rowHash % int64(conf.WriteThreadCnt)
+		chIdx := rowHash % int64(conf.WriteWorkerCnt)
 		writeChs[chIdx] <- writeEV
 	}
+
+	wg.Wait()
 }
 
 func makeWriteEvent(ev *replication.BinlogEvent) *WriteEvent {
@@ -396,13 +397,13 @@ func makeWriteEvent(ev *replication.BinlogEvent) *WriteEvent {
 
 	rowEv, ok := ev.Event.(*replication.RowsEvent)
 	if !ok {
-		FileLog.Printf("event is not a rows event, got: %v\n", ev.Header.EventType)
+		fileLog.Printf("event is not a rows event, got: %v\n", ev.Header.EventType)
 		return nil
 	}
 
 	table := string(rowEv.Table.Table)
 	if table != conf.TableName {
-		FileLog.Printf("rows event is not the required table, get %v\n", table)
+		fileLog.Printf("rows event is not the required table, get %v\n", table)
 		return nil
 	}
 
