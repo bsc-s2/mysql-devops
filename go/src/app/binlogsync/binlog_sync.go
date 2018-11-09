@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"reflect"
@@ -9,8 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	uuid "github.com/satori/go.uuid"
-	"github.com/siddontang/go-mysql/client"
 	"github.com/siddontang/go-mysql/replication"
 )
 
@@ -24,7 +25,7 @@ type Connection struct {
 }
 
 type DBInfo struct {
-	Conn  *client.Conn
+	Conn  *sql.DB
 	Shard *DBShard
 }
 
@@ -38,14 +39,13 @@ type WriteEvent struct {
 	event    *replication.BinlogEvent
 	before   map[string]interface{}
 	after    map[string]interface{}
-	dbInfo   *DBInfo
 	nextGTID string
 }
 
 type BinlogSyncer struct {
 	Config
 
-	DBPool   map[string]*client.Conn
+	DBPool   map[string]*sql.DB
 	WriteChs []chan *WriteEvent
 	CountCh  chan *Status
 
@@ -53,6 +53,8 @@ type BinlogSyncer struct {
 	wg       *sync.WaitGroup
 	shellLog *log.Logger
 	fileLog  *log.Logger
+
+	stop bool
 }
 
 type BinlogPosition struct {
@@ -62,11 +64,11 @@ type BinlogPosition struct {
 }
 
 type OutMessage struct {
-	Synced   int64          `yaml:"Synced"`
-	Faild    int64          `yaml:"Faild"`
-	Rate     float64        `yaml:"Rate(rows/s)"`
-	Position BinlogPosition `yaml:"Position"`
-	Error    map[string]int `yaml:"Error"`
+	Synced     int64          `yaml:"Synced"`
+	Faild      int64          `yaml:"Faild"`
+	RowsPerSec float64        `yaml:"RowsPerSec"`
+	Position   BinlogPosition `yaml:"Position"`
+	Error      map[string]int `yaml:"Error"`
 }
 
 type Status struct {
@@ -83,7 +85,7 @@ func NewBinlogSyncer(conf Config) *BinlogSyncer {
 	bs := &BinlogSyncer{
 		Config: conf,
 
-		DBPool:   make(map[string]*client.Conn),
+		DBPool:   make(map[string]*sql.DB),
 		WriteChs: make([]chan *WriteEvent, conf.WorkerCnt),
 		CountCh:  make(chan *Status, channelCapacity*conf.WorkerCnt),
 
@@ -91,6 +93,7 @@ func NewBinlogSyncer(conf Config) *BinlogSyncer {
 		wg:       &sync.WaitGroup{},
 		shellLog: shellLog,
 		fileLog:  fileLog,
+		stop:     false,
 	}
 
 	return bs
@@ -131,9 +134,8 @@ func (bs *BinlogSyncer) Sync() {
 }
 
 func (bs *BinlogSyncer) formatRow(srcRow []interface{}) map[string]interface{} {
-	// the first column `id` should not put in new rowValue
-	rowValue := make([]interface{}, len(srcRow)-1)
-	for i, v := range srcRow[1:] {
+	rowValue := make([]interface{}, len(srcRow))
+	for i, v := range srcRow {
 		if v == nil {
 			continue
 		}
@@ -163,10 +165,8 @@ func (bs *BinlogSyncer) writeToDB(chIdx int, inCh chan *WriteEvent) {
 
 	for ev := range inCh {
 		if ev.event.Header.EventType == replication.ROTATE_EVENT {
-			rotateEv, ok := ev.event.Event.(*replication.RotateEvent)
-			if !ok {
-				bs.fileLog.Printf("event is RotateEvent, but cannot convert to a RotateEvent")
-			}
+			rotateEv, _ := ev.event.Event.(*replication.RotateEvent)
+
 			stat := &Status{
 				goroutineIndex: chIdx,
 				position: BinlogPosition{
@@ -178,10 +178,12 @@ func (bs *BinlogSyncer) writeToDB(chIdx int, inCh chan *WriteEvent) {
 			continue
 		}
 
+		var dbInfo *DBInfo
 		var err error
-		ev.dbInfo, err = bs.getEventConnection(ev.after)
+		dbInfo, err = bs.getWriteConnection(ev.after)
 		if err != nil {
 			bs.shellLog.Printf("[%s] get connection failed: %v\n", bs.SourceConn.Addr, err)
+			bs.stop = true
 			return
 		}
 
@@ -198,25 +200,28 @@ func (bs *BinlogSyncer) writeToDB(chIdx int, inCh chan *WriteEvent) {
 		bs.fileLog.Printf("routin index: %d, before: %v, after: %v, event type: %v\n", chIdx, ev.before, ev.after, evType)
 
 		if evType == replication.UPDATE_ROWS_EVENTv2 || evType == replication.UPDATE_ROWS_EVENTv1 || evType == replication.UPDATE_ROWS_EVENTv0 {
-			sql = makeUpdateSql(ev.dbInfo.Shard.Table, bs.TableIndex, bs.TableField, index, value)
+			sql = makeUpdateSql(dbInfo.Shard.Table, bs.TableField, bs.TableField, value, value)
 
 		} else if evType == replication.DELETE_ROWS_EVENTv2 || evType == replication.DELETE_ROWS_EVENTv1 || evType == replication.DELETE_ROWS_EVENTv0 {
 
-			sql = makeDeleteSql(ev.dbInfo.Shard.Table, bs.TableIndex, index)
+			sql = makeDeleteSql(dbInfo.Shard.Table, bs.TableIndex, index)
 		} else if evType == replication.WRITE_ROWS_EVENTv2 || evType == replication.WRITE_ROWS_EVENTv1 || evType == replication.WRITE_ROWS_EVENTv0 {
 
-			sql = makeInsertSql(ev.dbInfo.Shard.Table, bs.TableField, value)
+			sql = makeInsertSql(dbInfo.Shard.Table, bs.TableField, value)
 		} else {
 			continue
 		}
 
 		bs.fileLog.Printf("routin index: %d, get sql statement: %v", chIdx, sql)
 
-		bs.mutex.Lock()
-		_, err = ev.dbInfo.Conn.Execute(sql)
-		bs.mutex.Unlock()
+		_, err = dbInfo.Conn.Exec(sql)
 		if err != nil {
 			bs.fileLog.Printf("Execute error: %v\n", err)
+
+			sqlErr := err.(*mysql.MySQLError)
+			if sqlErr.Number != 1062 {
+				bs.stop = true
+			}
 		}
 
 		stat := &Status{
@@ -254,11 +259,7 @@ func (bs *BinlogSyncer) readBinlog(binlogReader *replication.BinlogStreamer) {
 		}
 
 		if ev.Header.EventType == replication.GTID_EVENT {
-			gtidEv, ok := ev.Event.(*replication.GTIDEvent)
-			if !ok {
-				bs.fileLog.Printf("event is GTIDEvent, but cannot convert to a GTIDEvent")
-				continue
-			}
+			gtidEv, _ := ev.Event.(*replication.GTIDEvent)
 
 			u, _ := uuid.FromBytes(gtidEv.SID)
 			gtidNext = fmt.Sprintf("%s:%d", u.String(), gtidEv.GNO)
@@ -278,10 +279,13 @@ func (bs *BinlogSyncer) readBinlog(binlogReader *replication.BinlogStreamer) {
 
 		rowHash, err := hashStringSliceToInt32(indexValues)
 		if err != nil {
-			bs.shellLog.Printf("[%s] calculate hash failed: %v", bs.SourceConn.Addr, err)
+			bs.shellLog.Panicf("[%s] calculate hash failed: %v", bs.SourceConn.Addr, err)
 		}
 
 		chIdx := rowHash % int64(bs.WorkerCnt)
+		if bs.stop {
+			break
+		}
 		bs.WriteChs[chIdx] <- writeEV
 	}
 
@@ -296,29 +300,30 @@ func (bs *BinlogSyncer) collector() {
 	var errTypes = make(map[string]int)
 
 	var start = time.Now()
+
 	for outStat := range bs.CountCh {
 		if outStat.err != nil {
 			errCnt += 1
 			errTypes[outStat.err.Error()] += 1
 		}
+
 		rowCnt += 1
 
 		if rowCnt%bs.TickCnt == 0 {
 
-			rate := float64(bs.TickCnt) / time.Since(start).Seconds()
+			rowsPerSec := float64(bs.TickCnt) / time.Since(start).Seconds()
 
 			om := &OutMessage{
-				Synced:   rowCnt,
-				Faild:    errCnt,
-				Rate:     rate,
-				Position: outStat.position,
-				Error:    errTypes,
+				Synced:     rowCnt,
+				Faild:      errCnt,
+				RowsPerSec: rowsPerSec,
+				Position:   outStat.position,
+				Error:      errTypes,
 			}
 
-			outMessage, err := dumpYAML(om)
+			outMessage, err := marshalYAML(om)
 			if err != nil {
 				bs.fileLog.Printf("[%s] dump out message to YAML failed: %v\n", bs.SourceConn.Addr, outMessage)
-				return
 			}
 
 			outMessage = " ====== [" + bs.SourceConn.Addr + "] status ======\n" + outMessage
@@ -329,7 +334,7 @@ func (bs *BinlogSyncer) collector() {
 	}
 }
 
-func (bs *BinlogSyncer) getEventConnection(row map[string]interface{}) (*DBInfo, error) {
+func (bs *BinlogSyncer) getWriteConnection(row map[string]interface{}) (*DBInfo, error) {
 	shardValues := make([]interface{}, len(bs.TableShard))
 	for i, k := range bs.TableShard {
 		shardValues[i] = row[k]
@@ -342,8 +347,11 @@ func (bs *BinlogSyncer) getEventConnection(row map[string]interface{}) (*DBInfo,
 	if conn == nil {
 		addr := bs.DBConfig[shard.DBPort]
 
+		// DSN(Data Source Name) in go-sql-driver
+		dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s", addr.User, addr.Password, addr.Addr, addr.DBName)
+
 		var err error
-		conn, err = client.Connect(addr.Addr, addr.User, addr.Password, addr.DBName)
+		conn, err = sql.Open("mysql", dsn)
 		if err != nil {
 			bs.shellLog.Printf("[%s] get connection failed: %v\n", bs.SourceConn, err)
 			return nil, err
@@ -361,25 +369,23 @@ func (bs *BinlogSyncer) getEventConnection(row map[string]interface{}) (*DBInfo,
 
 func (bs *BinlogSyncer) findShards(tbShards []interface{}) *DBShard {
 
+	lenShards := len(bs.Shards)
 	//conf.Shards should be descending
-	i := sort.Search(len(bs.Shards), func(i int) bool {
+	i := sort.Search(lenShards, func(i int) bool {
 		shard := bs.Shards[i].From
 		rst, err := compareSlice(shard, tbShards)
 		if err != nil {
-			bs.shellLog.Printf("[%s] compare table shards failed: %v\n", bs.SourceConn.Addr, err)
+			bs.shellLog.Panicf("[%s] compare table shards failed: %v\n", bs.SourceConn.Addr, err)
 		}
 
-		if rst <= 0 {
-			return true
-		}
-		return false
+		return rst <= 0
 	})
 
-	if i >= 0 && i < len(bs.Shards) {
+	if i >= 0 && i < lenShards {
 		return &bs.Shards[i]
 	}
 
-	bs.shellLog.Printf("[%s] can not find shard: index out of bound", bs.SourceConn.Addr)
+	bs.shellLog.Printf("[%s] can not find shard: %v, index out of bound, got index: %d, shards len: %d", bs.SourceConn.Addr, tbShards, i, lenShards)
 	return nil
 }
 

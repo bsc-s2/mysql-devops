@@ -26,16 +26,19 @@ func hashStringSliceToInt32(src []string) (int64, error) {
 func compareSlice(a, b []interface{}) (int, error) {
 	lenA := len(a)
 	lenB := len(b)
-	if lenA != lenB {
-		return 0, errors.New(fmt.Sprintf("length of slices not equals: %d != %d", lenA, lenB))
-	}
 
 	for i, v := range a {
+
+		if i >= lenB {
+			return 1, nil
+		}
+
 		var rst int
+
 		switch v.(type) {
-		case int:
-			ai := reflect.ValueOf(v).Int()
-			bi := reflect.ValueOf(b[i]).Int()
+		case int, int8, int16, int32, int64:
+			ai, _ := interfaceToInt64(v)
+			bi, _ := interfaceToInt64(b[i])
 			rst = compareInt(ai, bi)
 		case string:
 			rst = strings.Compare(v.(string), b[i].(string))
@@ -48,6 +51,10 @@ func compareSlice(a, b []interface{}) (int, error) {
 		}
 
 		return rst, nil
+	}
+
+	if lenA < lenB {
+		return -1, nil
 	}
 
 	return 0, nil
@@ -65,7 +72,24 @@ func compareInt(a, b int64) int {
 	}
 }
 
-func parseYAML(filename string, v interface{}) error {
+func interfaceToInt64(v interface{}) (int64, error) {
+	switch v.(type) {
+	case int:
+		return int64(v.(int)), nil
+	case int8:
+		return int64(v.(int8)), nil
+	case int16:
+		return int64(v.(int16)), nil
+	case int32:
+		return int64(v.(int32)), nil
+	case int64:
+		return v.(int64), nil
+	default:
+		return 0, errors.New(fmt.Sprintf("unknow type of value:%v, type: %T", v, v))
+	}
+}
+
+func unmarshalYAML(filename string, v interface{}) error {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return err
@@ -79,7 +103,7 @@ func parseYAML(filename string, v interface{}) error {
 	return nil
 }
 
-func dumpYAML(v interface{}) (string, error) {
+func marshalYAML(v interface{}) (string, error) {
 
 	data, err := yaml.Marshal(v)
 	if err != nil {

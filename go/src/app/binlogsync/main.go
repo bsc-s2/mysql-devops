@@ -64,7 +64,7 @@ func main() {
 
 	// read config
 	confList := &ConfigList{}
-	err = parseYAML(confName, &confList)
+	err = unmarshalYAML(confName, &confList)
 	if err != nil {
 		shellLog.Panicf("read config file failed: %v\n", err)
 	}
