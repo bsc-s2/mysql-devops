@@ -5,9 +5,9 @@ import os
 import time
 import unittest
 
+from pykit import daemonize
 from pykit import proc
 from pykit import ututil
-from pykit import daemonize
 
 dd = ututil.dd
 
@@ -16,7 +16,7 @@ this_base = os.path.dirname(__file__)
 
 def subproc(script, env=None):
     if env is None:
-        env=dict(PYTHONPATH=this_base + '/../..',)
+        env = dict(PYTHONPATH=this_base + '/../..',)
 
     return proc.shell_script(script, env=env)
 
@@ -128,16 +128,40 @@ class TestDaemonize(unittest.TestCase):
                               path_daemonize=this_base + '/../..',
                               path_pykit=this_base + '/../../..'))
 
-        subproc('python2 {b}/close_fds.py close'.format(b=this_base), env=env)
-        time.sleep(0.2)
+        code, out, err = subproc('python2 {b}/close_fds.py close'.format(b=this_base), env=env)
+
+        dd('close_fds.py close result:')
+        dd(code)
+        dd('out:')
+        for l in out.split('\n'):
+            dd('  ', l)
+        dd('err:')
+        for l in err.split('\n'):
+            dd('  ', l)
+
+        time.sleep(1)
 
         fds = read_file(self.foo_fn)
+        dd('fds:', fds)
 
         self.assertNotIn(self.bar_fn, fds)
 
-        subproc('python2 {b}/close_fds.py open'.format(b=this_base), env=env)
-        time.sleep(0.2)
+        self._clean()
+
+        code, out, err = subproc('python2 {b}/close_fds.py open'.format(b=this_base), env=env)
+
+        dd('close_fds.py open result:')
+        dd(code)
+        dd('out:')
+        for l in out.split('\n'):
+            dd('  ', l)
+        dd('err:')
+        for l in err.split('\n'):
+            dd('  ', l)
+
+        time.sleep(1)
 
         fds = read_file(self.foo_fn)
+        dd('fds:', fds)
 
         self.assertIn(self.bar_fn, fds)

@@ -47,7 +47,8 @@ class Client(object):
 
     stopwatch_root_name = 'pykit.http.Client'
 
-    def __init__(self, host, port, timeout=60, stopwatch_kwargs=None):
+    def __init__(self, host, port, timeout=60,
+                 stopwatch_kwargs=None, https_context=None):
 
         self.host = host
         self.port = port
@@ -60,6 +61,8 @@ class Client(object):
         self.status = None
         self.headers = {}
         self.recv_iter = None
+        self.https_context = https_context
+        self.request_chunked_encoded = False
 
         self.stopwatch_kwargs = {
             # min_tracing_milliseconds=0 to trace all events. StopWatch trace
@@ -129,13 +132,13 @@ class Client(object):
 
         self._close()
 
-    def request(self, uri, method='GET', headers={}):
+    def request(self, uri, method='GET', headers=None):
 
         self.send_request(uri, method=method, headers=headers)
 
         self.read_response()
 
-    def send_request(self, uri, method='GET', headers={}):
+    def send_request(self, uri, method='GET', headers=None):
 
         self._reset_request()
         self.method = method
@@ -146,12 +149,18 @@ class Client(object):
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.settimeout(self.timeout)
             self.sock.connect((self.host, self.port))
+            if self.https_context is not None:
+                self.sock = self.https_context.wrap_socket(self.sock,
+                                                           server_hostname=self.host)
 
         bufs = ['{method} {uri} HTTP/1.1'.format(method=method, uri=uri), ]
 
         headers = headers or {}
         if 'Host' not in headers and 'host' not in headers:
             headers['Host'] = self.host
+
+        if headers.get('Transfer-Encoding') == 'chunked':
+            self.request_chunked_encoded = True
 
         for k, v in headers.items():
             bufs.append('%s: %s' % (k, v))
@@ -167,15 +176,19 @@ class Client(object):
             raise NotConnectedError('socket object is None')
 
         with self.stopwatch.timer('send_body'):
+            if self.request_chunked_encoded:
+                body = '{0:x}\r\n{1}\r\n'.format(len(body), body)
+
             self.sock.sendall(body)
 
-    def read_status(self):
+    def read_status(self, skip_100=True):
 
         if self.status is not None or self.sock is None:
             raise ResponseNotReadyError('response is unavailable')
 
-        self.recv_iter = _recv_loop(self.sock, self.timeout)
-        self.recv_iter.next()
+        if self.recv_iter is None:
+            self.recv_iter = _recv_loop(self.sock, self.timeout)
+            self.recv_iter.next()
 
         # read until we get a non-100 response
         while True:
@@ -192,6 +205,9 @@ class Client(object):
                     skip = self._readline()
                     if skip.strip() == '':
                         break
+
+            if skip_100 is False:
+                return status
 
         self.status = status
         return status
@@ -244,6 +260,29 @@ class Client(object):
         with self.stopwatch.timer('recv_body'):
             return self._read_body(size)
 
+    def readlines(self, delimiter=None):
+
+        if delimiter is None:
+            delimiter = '\n'
+
+        buf = ''
+        while True:
+
+            tmp = self._read_body(MAX_LINE_LENGTH)
+
+            if tmp == '':
+                if buf != '':
+                    yield buf
+                break
+
+            buf += tmp
+
+            lines = buf.split(delimiter)
+            buf = lines.pop()
+
+            for l in lines:
+                yield l + delimiter
+
     def _read_body(self, size):
 
         if size is not None and size <= 0:
@@ -294,6 +333,7 @@ class Client(object):
         self.has_read = 0
         self.status = None
         self.headers = {}
+        self.request_chunked_encoded = False
 
     def _read(self, size):
         return self.recv_iter.send(('block', size))

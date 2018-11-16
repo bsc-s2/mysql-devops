@@ -2,7 +2,9 @@
 # coding: utf-8
 
 import gc
+import os
 import socket
+import ssl
 import threading
 import time
 import unittest
@@ -19,6 +21,7 @@ HOST = '127.0.0.1'
 PORT = 38002
 KB = 1024
 MB = (1024**2)
+HOME_PATH = os.path.dirname(os.path.abspath(__file__))
 
 
 class TestHttpClient(unittest.TestCase):
@@ -38,6 +41,16 @@ class TestHttpClient(unittest.TestCase):
 
         'test_raise_line_too_long_error':
         (0, KB, 'a' * 65536),
+
+        'test_request_chunked':
+        (),
+
+        'test_readlines':
+        (0, 10, 'HTTP/1.1 200 OK\r\nContent-Length: 131086\r\n\r\n' + 'a'*65540 + '\r\nbb\r\n' + 'c'*65540),
+
+        'test_readlines_delimiter':
+        (0, 10, 'HTTP/1.1 200 OK\r\nContent-Length: 15\r\n\r\nabcd\rbcde\rcdef\r'),
+
     }
     request_headers = {}
     request_body = {}
@@ -171,6 +184,22 @@ class TestHttpClient(unittest.TestCase):
 
             self.assertEqual(expected_status, h.status)
 
+    def test_request_chunked(self):
+
+        h = http.Client(HOST, PORT)
+        h.send_request('', 'PUT', {'Transfer-Encoding': 'chunked'})
+
+        cases = (
+            ('aaaaaaaaa', 100),
+            ('bbbbbbbbbbbbbb', 100),
+            ('0000000000000', 100),
+            ('200_status', 200)
+                )
+
+        for body, status in cases:
+            h.send_body(body)
+            self.assertEqual(h.read_status(False), status)
+
     def test_request_headers(self):
 
         cases = (
@@ -216,6 +245,24 @@ class TestHttpClient(unittest.TestCase):
             time.sleep(0.1)
 
             self.assertEqual(body, self.request_body)
+
+    def test_readlines(self):
+
+        h = http.Client(HOST, PORT)
+        h.request('')
+
+        expected_body = ('a' * 65540 + '\r\n', 'bb\r\n', 'c' * 65540)
+        for idx, line in enumerate(h.readlines()):
+            self.assertEqual(expected_body[idx], line)
+
+    def test_readlines_delimiter(self):
+
+        h = http.Client(HOST, PORT)
+        h.request('')
+
+        expected_body = ('abcd\r', 'bcde\r', 'cdef\r')
+        for idx, line in enumerate(h.readlines('\r')):
+            self.assertEqual(expected_body[idx], line)
 
     def test_recving_server_close(self):
 
@@ -330,6 +377,22 @@ class TestHttpClient(unittest.TestCase):
 
         self.assertEqual([], h.get_trace())
 
+    def test_https(self):
+        cases = (
+            ('/get_1b', 'a'),
+            ('/get_10k', 'bc' * 5 * KB),
+            ('/get_30m', 'cde' * 10 * MB),
+        )
+
+        context = ssl._create_unverified_context()
+        cli = http.Client(HOST, PORT, https_context=context)
+        for uri, expected_res in cases:
+            cli.request(uri)
+            body = cli.read_body(None)
+
+            self.assertEqual(200, cli.status)
+            self.assertEqual(expected_res, body)
+
     def __init__(self, *args, **kwargs):
 
         super(TestHttpClient, self).__init__(*args, **kwargs)
@@ -358,6 +421,11 @@ class TestHttpClient(unittest.TestCase):
         else:
             addr = (HOST, PORT)
             self.http_server = HTTPServer(addr, Handle)
+            if 'https' in self._testMethodName:
+                cert_file = os.path.join(HOME_PATH, 'test_https.pem')
+                self.http_server.socket = ssl.wrap_socket(self.http_server.socket,
+                                                          certfile=cert_file,
+                                                          server_side=True)
             self.http_server.serve_forever()
 
     def _special_case_handle(self):
@@ -368,22 +436,38 @@ class TestHttpClient(unittest.TestCase):
         sock.bind(addr)
         sock.listen(10)
 
-        conn, _ = sock.accept()
-        data = conn.recv(1024)
-        dd('recv data:' + data)
 
-        res = self.special_cases.get(self._testMethodName)
-        if res is None:
-            return
+        if self._testMethodName == 'test_request_chunked':
 
-        sleep_time, each_send_size, content = res
-        try:
-            while len(content) > 0:
-                conn.sendall(content[:each_send_size])
-                content = content[each_send_size:]
-                time.sleep(sleep_time)
-        except socket.error as e:
-            dd(repr(e) + ' while response')
+            conn, _ = sock.accept()
+            for i in range(3):
+                data = conn.recv(1024)
+                dd('recv data:' + data)
+
+                res = 'HTTP/1.1 100 CONTINUE\r\n\r\n'
+                conn.sendall(res)
+
+            data = conn.recv(1024)
+            dd('recv data:' + data)
+            res = 'HTTP/1.1 200 OK\r\n\r\n'
+            conn.sendall(res)
+
+        else:
+            conn, _ = sock.accept()
+            data = conn.recv(1024)
+            dd('recv data:' + data)
+            res = self.special_cases.get(self._testMethodName)
+            if res is None:
+                return
+
+            sleep_time, each_send_size, content = res
+            try:
+                while len(content) > 0:
+                    conn.sendall(content[:each_send_size])
+                    content = content[each_send_size:]
+                    time.sleep(sleep_time)
+            except socket.error as e:
+                dd(repr(e) + ' while response')
 
         time.sleep(1)
         conn.close()

@@ -7,8 +7,11 @@ from .net import (
 
     NetworkError,
     IPUnreachable,
+    InvalidIP4,
+    InvalidIP4Number,
 
     choose_by_idc,
+    choose_ips,
     choose_inn,
     choose_pub,
     choose_by_regex,
@@ -21,6 +24,8 @@ from .net import (
     is_ip4,
     is_ip4_loopback,
     parse_ip_regex_str,
+    ip_to_num,
+    num_to_ip,
 )
 
 __all__ = [
@@ -31,6 +36,8 @@ __all__ = [
 
     'NetworkError',
     'IPUnreachable',
+    'InvalidIP4',
+    'InvalidIP4Number',
 
     'choose_by_idc',
     'choose_inn',
@@ -45,4 +52,6 @@ __all__ = [
     'is_ip4',
     'is_ip4_loopback',
     'parse_ip_regex_str',
+    'ip_to_num',
+    'num_to_ip',
 ]

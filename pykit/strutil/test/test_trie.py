@@ -12,21 +12,22 @@ dd = ututil.dd
 
 this_base = os.path.dirname(__file__)
 
+
 class TestTrie(unittest.TestCase):
 
     def setUp(self):
         self.strs = (
-                'abc',
-                'abcdef',
-                'abcdeg',
-                'abcdfg',
-                'abd',
-                'abe',
-                'axy',
-                'b11',
-                'b12',
-                'b123',
-                'b14',
+            'abc',
+            'abcdef',
+            'abcdeg',
+            'abcdfg',
+            'abd',
+            'abe',
+            'axy',
+            'b11',
+            'b12',
+            'b123',
+            'b14',
         )
         self.iterables = (
             (1, 'ab', '我'),
@@ -80,6 +81,45 @@ class TestTrie(unittest.TestCase):
             dd('{start:<20} {n:>10}'.format(start=start, n=n))
             self.assertEqual(expected[i], (start, n))
 
+    def test_sharding_accuracy(self):
+
+        dd()
+
+        cases = (
+            [5,
+             ((None,           5),
+              ((1, 'd',),  5),
+              ((2, 'b', 'x'),  5),
+              ((2, 'b', 'xx'), 3),
+              ),
+             ],
+            [9,
+             ((None,  9),
+              ((2,),  9),
+              ),
+             ],
+            [len(self.iterables),
+             ((None,  len(self.iterables)),
+              ),
+             ],
+            [len(self.iterables) + 1,
+             ((None,  len(self.iterables)),
+              ),
+             ],
+        )
+
+        for accuracy, expected in cases:
+            rst = strutil.sharding(self.iterables, size=5,
+                                   accuracy=accuracy, joiner=tuple)
+
+            dd("accuracy:", accuracy)
+            dd("rst:")
+            dd(rst)
+
+            for i, (start, n) in enumerate(rst):
+                dd('{start:<20} {n:>10}'.format(start=start, n=n))
+                self.assertEqual(expected[i], (start, n))
+
     def test_trie_whole_string(self):
 
         t = strutil.make_trie(self.strs, node_max_num=3)
@@ -128,7 +168,6 @@ class TestTrie(unittest.TestCase):
             # Leaf node number limit
             if len(v) == 0:
                 self.assertLessEqual(rst, 3)
-
 
     def test_node_max_num(self):
 
@@ -203,16 +242,16 @@ class TestTrie(unittest.TestCase):
 
                 # the last shard might have less items
                 if i < len(rst) - 1:
-                    nxt = rst[i+1][0]
+                    nxt = rst[i + 1][0]
                     self.assertLessEqual(_size, size)
                     self.assertLessEqual(size, _size + _accuracy)
                     self.assertEqual(len([x for x in lines
-                                          if x >= start and x < nxt ]),
+                                          if x >= start and x < nxt]),
                                      size)
                 else:
                     self.assertLessEqual(size, _size)
                     self.assertEqual(len([x for x in lines
-                                          if x >= start ]),
+                                          if x >= start]),
                                      size)
 
                 tot += size

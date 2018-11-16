@@ -12,6 +12,8 @@ from .fsutil import (
     get_path_fs,
     get_path_inode_usage,
     get_path_usage,
+    get_sub_dirs,
+    list_fns,
     makedirs,
     read_file,
     remove,
@@ -19,11 +21,20 @@ from .fsutil import (
 )
 
 from .cat import (
+    SEEK_END,
+    SEEK_START,
+
     CatError,
     LockTimeout,
     NoData,
     NoSuchFile,
     Cat
+)
+
+from .iostat import (
+    DeviceNotFound,
+
+    iostat,
 )
 
 __all__ = [
@@ -40,15 +51,23 @@ __all__ = [
     "get_path_fs",
     "get_path_inode_usage",
     "get_path_usage",
+    "get_sub_dirs",
+    "list_fns",
     "makedirs",
     "read_file",
     "remove",
     "write_file",
 
+    "SEEK_END",
+    "SEEK_START",
 
     "CatError",
     "LockTimeout",
     "NoData",
     "NoSuchFile",
-    "Cat"
+    "Cat",
+
+    "DeviceNotFound",
+
+    "iostat",
 ]

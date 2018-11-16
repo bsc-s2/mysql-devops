@@ -5,6 +5,7 @@ unittest utility
 import inspect
 import logging
 import os
+import socket
 import time
 import unittest
 
@@ -13,6 +14,16 @@ _glb = {
 }
 
 debug_to_stdout = os.environ.get('UT_DEBUG') == '1'
+
+
+# TODO make this configurable
+# logging.basicConfig(level='INFO',
+#                     format='[%(asctime)s,%(process)d-%(thread)d,%(filename)s,%(lineno)d,%(levelname)s] %(message)s',
+#                     datefmt='%H:%M:%S'
+#                     )
+
+# logger = logging.getLogger('kazoo')
+# logger.setLevel('INFO')
 
 
 class Timer(object):
@@ -100,7 +111,8 @@ def dd(*msg):
     And dd always write log to log file in /tmp dir.
     """
 
-    s = ' '.join([str(x) for x in msg])
+    s = ' '.join([x.encode('utf-8') if isinstance(x, unicode) else str(x)
+                  for x in msg])
 
     _init()
 
@@ -175,3 +187,28 @@ def _find_frame_by_self(clz):
         frame = frame.f_back
 
     return None
+
+
+def wait_listening(ip, port, timeout=15, interval=0.5):
+
+    # Wait at most `timeout` second for a tcp listening service to serve.
+
+    for ii in range(40):
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.connect((ip, port))
+            break
+        except socket.error:
+            dd('trying to connect to {0} failed'.format(str((ip, port))))
+            sock.close()
+            time.sleep(.4)
+    else:
+        raise
+
+def has_env(kv):
+
+    # kv: KEY=value
+
+    k, v = kv.split('=', 1)
+    return os.environ.get(k) == v

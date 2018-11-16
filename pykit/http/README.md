@@ -31,6 +31,8 @@
   - [http.Client.send_body](#httpclientsend_body)
   - [http.Client.read_body](#httpclientread_body)
   - [http.Client.get_trace_str](#httpclientget_trace_str)
+  - [http.headers_add_host](#httpheaders_add_host)
+  - [http.request_add_host](#httprequest_add_host)
 - [Author](#author)
 - [Copyright and License](#copyright-and-license)
 
@@ -223,7 +225,7 @@ Whether response body is chunked encoding or not.
 ##  http.Client
 
 **syntax**:
-`http.Client(host, port, timeout=60, stopwatch_kwargs=None)`
+`http.Client(host, port, timeout=60, stopwatch_kwargs=None, https_context=None)`
 
 HTTP client class
 
@@ -254,6 +256,9 @@ HTTP client class
                      min_tracing_milliseconds=3,
                      time_func=None):
     ```
+
+-   `https_context`:
+    a `ssl.SSLContext` instance describing the various SSL options. Defaults to `None`.
 
 #   Methods
 
@@ -379,6 +384,21 @@ Read and return the response body.
 **return**:
 the response body.
 
+##  http.Client.readlines
+
+**syntax**:
+`http.Client.readlines(delimiter)`
+
+Read and yield one line in response body each time.
+
+**arguments**:
+
+-   `delimiter`:
+    specify the delimiter between each line, defalut supporting `\n`.
+
+**return**:
+a generator yileding one line including delimiter in response body each time.
+
 ##  http.Client.get_trace_str
 
 **syntax**:
@@ -404,6 +424,41 @@ status line, there would be two `recv_status` fields.
 If the caller calls `http.Client.read_body` more than one time, there would be
 more than one `recv_body` fields.
 
+##  http.headers_add_host
+
+**syntax**:
+`http.headers_add_host(headers, address)`
+
+If there is no Host field in the headers, insert the address as a Host into the headers.
+
+**arguments**:
+
+-   `headers`:
+    a `dict`(header name, header value) of http request headers
+
+-   `address`:
+    a `string` represents a domain name
+
+**return**:
+    headers after adding
+
+##  http.request_add_host
+
+**syntax**:
+`http.request_add_host(request, address)`
+
+If the request has no headers field, or request['headers'] does not have a Host field, then add address to Host.
+
+**arguments**:
+
+-   `request`:
+    a `dict`(request key, request name) of http request
+
+-   `address`:
+    a `string` represents a domain name
+
+**return**:
+    request after adding
 
 #   Author
 

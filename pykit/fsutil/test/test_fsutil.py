@@ -73,6 +73,10 @@ class TestFSUtil(unittest.TestCase):
         for k in ('device', 'mountpoint', 'fstype', 'opts'):
             self.assertIn(k, root)
 
+        notall = fsutil.get_disk_partitions(all=False)
+        self.assertTrue(len(rst) > len(notall))
+        self.assertEqual(set([]), set(notall) - set(rst))
+
     def test_get_device(self):
 
         rst = fsutil.get_device('/inexistent')
@@ -197,6 +201,34 @@ class TestFSUtil(unittest.TestCase):
 
         dd('specify uid/gid, to change uid, you need root privilege')
         fsutil.makedirs(fn, uid=1, gid=1)
+
+    def test_get_sub_dirs(self):
+        fsutil.makedirs('test_dir/sub_dir1')
+        fsutil.makedirs('test_dir/sub_dir2')
+        fsutil.write_file('test_dir/test_file', 'foo')
+
+        sub_dirs = fsutil.get_sub_dirs('test_dir')
+        self.assertListEqual(['sub_dir1', 'sub_dir2'], sub_dirs)
+
+        fsutil.remove('test_dir')
+
+    def test_list_fns(self):
+
+        fsutil.makedirs('test_dir/foo_dir')
+
+        fsutil.write_file('test_dir/foo1', 'foo1')
+        fsutil.write_file('test_dir/foo2', 'foo2')
+        fsutil.write_file('test_dir/foo21', 'foo21')
+        fsutil.write_file('test_dir/foo_dir/foo', 'foo')
+        fsutil.write_file('test_dir/foo_dir/bar', 'bar')
+
+        self.assertEqual(['foo1', 'foo2', 'foo21'], fsutil.list_fns('test_dir'))
+        self.assertEqual(['foo2'], fsutil.list_fns('test_dir', pattern='2$'))
+
+        self.assertEqual(['bar', 'foo'], fsutil.list_fns('test_dir/foo_dir'))
+        self.assertEqual(['bar'], fsutil.list_fns('test_dir/foo_dir', pattern='^b'))
+
+        fsutil.remove('test_dir')
 
     def test_makedirs_with_config(self):
 

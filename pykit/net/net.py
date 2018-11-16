@@ -1,5 +1,7 @@
 import logging
 import re
+import socket
+import struct
 import sys
 import types
 
@@ -25,6 +27,14 @@ class NetworkError(Exception):
 
 
 class IPUnreachable(NetworkError):
+    pass
+
+
+class InvalidIP4(Exception):
+    pass
+
+
+class InvalidIP4Number(Exception):
     pass
 
 
@@ -85,6 +95,17 @@ def is_inn(ip):
     return ip_class(ip) == INN
 
 
+def choose_ips(ips, ip_type=None):
+    if ip_type is None:
+        return ips
+    elif ip_type == INN:
+        return choose_inn(ips)
+    elif ip_type == PUB:
+        return choose_pub(ips)
+    else:
+        raise ValueError('invalid ip_type: {ip_type}'.format(ip_type=ip_type))
+
+
 def choose_pub(ips):
     return [x for x in ips if ip_class(x) == PUB]
 
@@ -131,7 +152,7 @@ def get_host_ip4(iface_prefix=None, exclude_prefix=None):
 
             for addr in addrs[netifaces.AF_INET]:
 
-                ip = addr['addr']
+                ip = str(addr['addr'])
 
                 if not is_ip4_loopback(ip):
                     ips.append(ip)
@@ -235,6 +256,24 @@ def choose_by_regex(ips, ip_regexs):
                 rst.append(ip)
 
     return rst
+
+
+def ip_to_num(ip_str):
+
+    if not is_ip4(ip_str):
+        raise InvalidIP4('IP is invalid: {s}'.format(s=ip_str))
+
+    return struct.unpack('>L', socket.inet_aton(ip_str))[0]
+
+
+def num_to_ip(ip_num):
+
+    if isinstance(ip_num, bool) or not isinstance(ip_num, (int, long)):
+        raise InvalidIP4Number('The type of IP4 number should be int or long :{t}'.format(t=type(ip_num)))
+    if ip_num > 0xffffffff or ip_num < 0:
+        raise InvalidIP4Number('IP4 number should be between 0 and 0xffffffff :{s}'.format(s=ip_num))
+
+    return socket.inet_ntoa(struct.pack('>L', ip_num))
 
 
 if __name__ == "__main__":

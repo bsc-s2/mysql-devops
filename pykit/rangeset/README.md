@@ -13,10 +13,21 @@
     - [Range.cmp](#rangecmp)
     - [Range.has(val)](#rangehasval)
     - [Range.is_adjacent](#rangeis_adjacent)
+    - [Range.intersect](#rangeintersect)
+    - [Range.substract](#rangesubstract)
     - [Range.length](#rangelength)
+    - [Range.val](#rangeval)
+  - [rangeset.ValueRange](#rangesetvaluerange)
+    - [ValueRange.set](#valuerangeset)
   - [rangeset.RangeSet](#rangesetrangeset)
     - [RangeSet.add](#rangesetadd)
+    - [RangeSet.find_overlapped](#rangesetfind_overlapped)
     - [RangeSet.has](#rangesethas)
+  - [rangeset.RangeDict](#rangesetrangedict)
+    - [RangeDict.add](#rangedictadd)
+    - [RangeDict.get](#rangedictget)
+    - [RangeDict.get_min](#rangedictget_min)
+    - [RangeDict.normalize](#rangedictnormalize)
 - [Methods](#methods)
   - [rangeset.union](#rangesetunion)
   - [rangeset.substract](#rangesetsubstract)
@@ -142,7 +153,54 @@ merged into one range.
 
 **return**:
 `True` for `[1, 2] and [2, 3]`
-`Fales` for `[1, 2] and [3, 4]` or `[1, 2] and [1, 3]`
+`False` for `[1, 2] and [3, 4]` or `[1, 2] and [1, 3]`
+
+
+###  Range.intersect
+
+**syntax**:
+`Range.intersect(rng)`
+
+Intersect this range with another range.
+
+E.g.
+
+```python
+Range(1, 5).intersect(2, None) # Range(2, 5)
+```
+
+**arguments**:
+
+-   `rng`: is a`list`, `Range` or `ValueRange`
+
+**return**:
+`None` if it has no itersection with `rng`, or a new instance of intersection.
+
+
+###  Range.substract
+
+**syntax**:
+`Range.substract(rng)`
+
+Remove `rng` from a range.
+The result is a list of 2 `Range`.
+Because `rng` might split it into two separate sub range.
+
+**Synopsis**:
+
+```
+Range(0, 5).substract([1, 2])    # [[0, 1], [2, 5]]
+Range(0, 5).substract([-1, 2])   # [None, [2, 5]]
+Range(0, 5).substract([None, 6]) # [None, None]
+```
+
+**arguments**:
+
+-   `rng`:
+    is another `Range` or `list` of 2 elements that represents a range.
+
+**return**:
+a list of 2 `Range` instance.
 
 
 ###  Range.length
@@ -150,13 +208,74 @@ merged into one range.
 **syntax**:
 `Range.length()`
 
-Return range length if it is a numeric range such as `int`, `float`
+Return range length if it is a numeric range such as `int`, `float` or string
+range.
+
+If it is a string range, such as `["a", "abc"]`, the length is a float number
+between 0 and 1.
+
+It treats `a` and `b` as two base-257 float `va = 0.a[0]a[1]...` and
+`vb = 0.b[0]b[1]...`.
+And we define the length to be `vb - va`.
+
+For `i >= len(a)` `a[i]` is defined to be 0,
+Otherwize, `a[i]` is defined to be `ord(a[i]) + 1`.
+Thus:
+
+-   empty string `""` is 0,
+-   `"\0"` is 1,
+-   `"a"` is `0x62`(ascii of `"a"` is `0x61`).
+
+There are 257 possible value: empty string `""` and 256 chars `"\x00" ~ "\xff"`.
+
+In python the length of `[str(a), str(b)]` is defined as:
+```
+sum([ (b[i] - a[i]) / 257.0**(i+1)
+      for i in range(0, max([len(a), len(b)]))
+])
+```
+
 
 **return**:
 length in the same type of one of its boundary.
 
 If one of left and right boundary is `None`, in which case it is an infite
 range, `float('inf')` is returned.
+
+###  Range.val
+
+**syntax**:
+`Range.val()`
+
+**return**:
+The value of range associated.
+
+
+##  rangeset.ValueRange
+
+**syntax**:
+`rangeset.ValueRange(left, right, val=None)`
+
+It maps a range to a value.
+E.g.: `ValueRange(0, 1, 'foo')` defines that value for `[0, 1)` is `"foo"`.
+
+A `ValueRange` is left-close and right-open.
+
+`ValueRange` has the same methods as `Range`.
+
+
+###  ValueRange.set
+
+**syntax**:
+`ValueRange.set(v)`
+
+**arguments**:
+
+-   `v`:
+    the value to update to this range.
+
+**return**:
+Nothing
 
 
 ##  rangeset.RangeSet
@@ -196,6 +315,31 @@ RangeSet([[10, 20], [30, 40]].add([0, 35])  # [[0, 40]]
 nothing, but modify the range-set in place.
 
 
+###  RangeSet.find_overlapped
+
+**syntax**:
+`RangeSet.find_overlapped(rng)`
+
+Find all ranges those overlaps with `rng`.
+E.g.
+
+```python
+
+RangeSet([[None, 10], [20, 30], [40, None]]).find_overlapped([29, 41])
+# RangeSet([[20, 30, 'b'], [40, None, 'c']])
+```
+
+**arguments**:
+
+-   `rng`:
+    a range iterable with at least 2 elements, such `list`, `tuple`, `Range` or
+    `ValueRange`.
+
+**return**:
+a instance of `self.__class__` with `Range` or `ValueRange` elements those
+overlaps with `rng`.
+
+
 ###  RangeSet.has
 
 **syntax**:
@@ -221,6 +365,208 @@ RangeSet([[10, 20], [30, 40]]).has(50) # False
 
 **return**:
 `True` if `val` is in it. Or `False`.
+
+
+
+##  rangeset.RangeDict
+
+**syntax**:
+`rangeset.RangeDict(iterable=None, range_clz=None, dimension=None)`
+
+`RangeDict` defines a mapping from ranges to values.
+E.g.:
+
+```
+rd = RangeDict([(0, 1, 'foo'), (1, 2, 'bar')])
+rd.get(0)   # 'foo'
+rd.get(1)   # 'bar'
+rd.get(1.5) # 'bar'
+rd.get(2)   # KeyError
+```
+
+**Difference from `RangeSet`**:
+Adjacent ranges such as `(0, 1), (1, 2)` can exist in `RangeDict`
+but can not exist in `RangeSet`.
+Because in `RangeDict` each range there is a value bound.
+
+**arguments**:
+are same as `RangeSet` except the default value for `range_clz` is `ValueRange`
+instead of `Range`.
+
+-   `dimension`:
+    specifies if to convert the value in it into a nested `RangeDict`.
+    It is used to create multi dimension RangeDict.
+    By default it is `1`.
+
+    **Synopsis**:
+
+    ```python
+    """
+    A sample of 2d mapped value: time(t) and a string range:
+    This setting split the entire plain into 4 areas.
+
+        range
+        ^
+        |
+      d +----+----+
+        |    | cd |
+      c + bd +----+
+        |    |    |
+      b +----+    |
+        | ab | ac |
+      a +----+----+
+        |
+     '' +----+----+--------> t
+        0    1    2
+    """
+
+    inp = [
+            [0, 1, [['a', 'b', 'ab'],
+                    ['b', 'd', 'bd'],
+            ]],
+            [1, 2, [['a', 'c', 'ac'],
+                    ['c', 'd', 'cd'],
+            ]],
+    ]
+
+    r = rangeset.RangeDict(inp, dimension=2)
+
+    print r.get(0.5, 'a') # 'ab'
+    print r.get(1.5, 'a') # 'ac'
+    ```
+
+> One of a useful scenario for 2d `RangeDict` is to store sharding info.
+> Because sharding config might change, there might be a migration period a server
+> needs two config.
+>
+> With the following example:
+>
+> ```
+>     range
+>     ^
+>     |
+>   d +----+----+
+>     |    | cd |
+>   c + bd +----+
+>     |    |    |
+>   b +----+    |
+>     | ab | ac |
+>   a +----+----+
+>     |
+>  '' +----+----+--------> t
+>     0    1    2
+> ```
+>
+> At first(before time `1`) we store keys start with `a ~ b` in database `ab`,
+> and keys start with `b ~ d` in database `bd`.
+>
+> At time `1` the administrator decide to re-balance all keys with a new
+> sharding config:
+> storing keys starts with `a ~ c` in database `ac`,
+> and keys start with `c ~ d` in database `cd`.
+>
+> All API servers must be aware of the config change in order to run a dual-read
+> mechanism.
+> E.g. to read a key `bb`:
+>
+> -   First read it from the latest configured database `ac`, if not found:
+> -   Then read it from database `bd`: the previous shard for `bb`.
+>
+> This way it let the system to smoothly transfer from one config to another.
+
+Methods of `RangeDict` are the same as `RangeSet` except the following three:
+
+
+###  RangeDict.add
+
+**syntax**:
+`RangeDict.add(rng, val)`
+
+Add a mapping from range to value into `RangeDict`.
+
+**arguments**:
+
+-   `rng`:
+    a two element iterable that defines a range.
+
+-   `val`:
+    value of any data type.
+
+**return**:
+Nothing
+
+
+###  RangeDict.get
+
+**syntax**:
+`RangeDict.get(pos, *positions)`
+
+**arguments**:
+
+-   `pos`:
+    position in `RangeDict`
+
+-   `positions`:
+    the nested position to get if this `RangeDict.dimension > 1`.
+
+**return**:
+the value of range that `pos` is in.
+
+If `pos` is not in any ranges, `KeyError` is raised.
+
+
+### RangeDict.get_min
+
+**syntax**:
+`RangeDict.get_min(is_lt=None)`
+
+Get range of the minimum value in the range dict. If minmum value has more than one range, then get
+the first one.
+
+**argument**:
+
+-   `is_lt`:
+    is a function that receives 2 arguments `a` and `b`, returns `True` if `a` is "smaller" than `b`,
+    otherwise return `False`.
+    Example:
+    ```
+    def is_lt(a, b):
+        return a < b
+    ```
+    If `is_lt` is `None`, use `a < b` to decide 'a' is smaller than 'b'.
+
+**return**:
+- `i`:
+    the index of the minimum value in the range dict.
+
+- `rng`:
+    a `ValueRange`, which is the range of the minimum value in the range dict.
+
+- `val`:
+    the minimum value in the range dict.
+
+If range dict is empty, `ValueError` is raised.
+
+
+###  RangeDict.normalize
+
+**syntax**:
+`RangeDict.normalize()`
+
+Reduce number of elements by
+merging adjacent ranges those have the same value into one continuous range.
+
+**Values are compared with `==`, not `is`**
+
+E.g.:
+
+```python
+rd = rangeset.RangeDict([(1, 2, '12'), [2, 3, '12']])
+rd.normalize() # [[1, 3, '12']]
+```
+
+**return**:
+Nothing.
 
 
 #   Methods

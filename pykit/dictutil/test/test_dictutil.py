@@ -1215,110 +1215,103 @@ class TestAdd(unittest.TestCase):
 
     def test_add(self):
         cases = (
-            ({}, None, None, None, {}),
-            ({}, 'foo', None, None, {}),
-            ({}, 123, None, None, {}),
-            ({}, {}, None, None, {}),
-            ({'a': 1}, {}, None, None, {'a': 1}),
-            ({'a': 1}, {'a': 2}, None, None, {'a': 3}),
-            ({'a': '1'}, {'a': '2'}, None, None, {'a': '12'}),
-            ({'a': '1'}, {'b': '2'}, None, None, {'a': '1', 'b': '2'}),
-            ({'a': '1'}, {'b': {}}, None, None, {'a': '1', 'b': {}}),
-            ({'a': {}}, {'b': {}}, None, None, {'a': {}, 'b': {}}),
-            ({'a': {}}, {'a': {}}, None, None, {'a': {}}),
+            ({},          None,       {}, {}),
+            ({},          'foo',      {}, {}),
+            ({},          123,        {}, {}),
+            ({},          {},         {}, {}),
+            ({'a': 1},    {},         {}, {'a': 1}),
+            ({},          {'a': 2},   {}, {'a': 2}),
+            ({'a': 1},    {'a': 2},   {}, {'a': 3}),
+            ({'a': '1'},  {'a': '2'}, {}, {'a': '12'}),
+            ({'a': '1'},  {'b': '2'}, {}, {'a': '1', 'b': '2'}),
+            ({'a': '1'},  {'b': {}},  {}, {'a': '1', 'b': {}}),
+            ({'a': {}},   {'b': {}},  {}, {'a': {}, 'b': {}}),
+            ({'a': {}},   {'a': {}},  {}, {'a': {}}),
 
             ({'a': {'k1': 1}},
              {'a': {}},
-             None,
-             None,
+             {},
              {'a': {'k1': 1}}),
 
             ({'a': {'k1': 1}},
              {'a': {'k2': 1}},
-             None,
-             None,
+             {},
              {'a': {'k1': 1, 'k2': 1}}),
 
             ({'a': {'k1': 1}},
              {'a': {'k1': 1}},
-             None,
-             None,
+             {},
              {'a': {'k1': 2}}),
 
             ({'a': {'k1': 1}},
              {'a': {'k1': 1}},
-             {'a': True},
-             None,
+             {'exclude': {'a': True}, },
              {'a': {'k1': 1}}),
 
             ({'a': {'k1': 1}},
              {'a': {'k1': 1}},
-             {'a': {}},
-             None,
+             {'exclude': {'a': {}}, },
              {'a': {'k1': 2}}),
 
             ({'a': {}},
              {'a': {'k1': 1}},
-             {'a': {}},
-             None,
+             {'exclude': {'a': {}}, },
              {'a': {'k1': 1}}),
 
             ({'a': {}},
              {'a': {'k1': 1}},
-             {'a': True},
-             None,
+             {'exclude': {'a': True}, },
              {'a': {}}),
 
             ({'a': {'k1': 1}},
              {'a': {'k1': 1}},
-             {'a': {}},
-             None,
+             {'exclude': {'a': {}}, },
              {'a': {'k1': 2}}),
 
             ({'a': {'k1': 1}},
              {'a': {'k1': 1}},
-             {'b': True},
-             None,
+             {'exclude': {'b': True}, },
              {'a': {'k1': 2}}),
 
             ({'a': {'k1': 1}},
              {'a': {'k1': 1}},
-             {'b': True},
-             None,
+             {'exclude': {'b': True}, },
              {'a': {'k1': 2}}),
 
             ({'a': {'k1': 1}},
              {'a': {'k1': 1}},
-             {'a': {'k1': True}},
-             True,
+             {'exclude': {'a': {'k1': True}}, 'recursive': True},
              {'a': {'k1': 1}}),
 
             ({'a': {'k1': 1}},
              {'a': {'k1': 1}},
-             {'a': {'k2': True}},
-             True,
+             {'exclude': {'a': {'k2': True}}, 'recursive': True},
              {'a': {'k1': 2}}),
 
             ({'a': {'k1': 1}, 'b': 1},
              {'a': {'k1': 1, 'k2': 1}, 'b': 1},
-             None,
-             False,
+             {'recursive': False},
              {'a': {'k1': 1}, 'b': 2}),
         )
 
-        for a, b, exclude, recursive, expected in cases:
-            result = dictutil.add(a, b, exclude=exclude,
-                                  recursive=recursive)
+        for a, b, kwargs, expected in cases:
+            dd('a:', a)
+            dd('b:', b)
+            dd('kwargs:', kwargs)
+            dd('expected:', expected)
+
+            result = dictutil.add(a, b, **kwargs)
+            dd('rst:', result)
+
             self.assertIsNot(a, result)
             self.assertDictEqual(expected, result,
-                                 repr([a, b, exclude, expected, result]))
+                                 repr([a, b, kwargs, result]))
 
-            result = dictutil.addto(a, b, exclude=exclude,
-                                    recursive=recursive)
+            result = dictutil.addto(a, b, **kwargs)
 
             self.assertIs(a, result)
             self.assertDictEqual(expected, result,
-                                 repr([a, b, exclude, expected, result]))
+                                 repr([a, b, kwargs, result]))
 
 
 class TestCombine(unittest.TestCase):
@@ -1329,22 +1322,389 @@ class TestCombine(unittest.TestCase):
              {'a': 3},
              operator.mul,
              None,
+             True,
              {'a': 6}),
 
             ({'a': 2},
              {'a': 3},
              operator.mul,
              {'a': True},
+             True,
              {'a': 2}),
+
+            ({'a': 2, 'b': {'c': 3}},
+             {'a': 4, 'b': {'d': 5}},
+             operator.add,
+             None,
+             True,
+             {'a': 6, 'b': {'c': 3, 'd': 5}}),
+
+            ({'a': 2},
+             {'a': 3, 'b': {'c': 4}},
+             operator.add,
+             None,
+             True,
+             {'a': 5, 'b': {'c': 4}}),
+
+            ({'a': 2},
+             {'a': 3, 'b': {'c': 4}},
+             operator.add,
+             None,
+             False,
+             {'a': 5}),
+
+            ({'a': 2},
+             {'b': {'c': {'d': 3}}},
+             operator.add,
+             None,
+             True,
+             {'a': 2, 'b': {'c': {'d': 3}}}),
         )
 
-        for a, b, op, exclude, expected in cases:
-            result = dictutil.combine(a, b, op, exclude=exclude)
+        for a, b, op, exclude, recursive, expected in cases:
+            result = dictutil.combine(a, b, op, exclude=exclude, recursive=recursive)
             self.assertIsNot(a, result)
             self.assertDictEqual(expected, result,
                                  repr([a, b, op, exclude, expected, result]))
 
-            result = dictutil.combineto(a, b, op, exclude=exclude)
+            result = dictutil.combineto(a, b, op, exclude=exclude, recursive=recursive)
             self.assertIs(a, result)
             self.assertDictEqual(expected, result,
                                  repr([a, b, op, exclude, expected, result]))
+
+    def test_deepcopy(self):
+
+        def add_value(dict_b):
+            for k, v in dict_b.items():
+                if isinstance(v, dict):
+                    add_value(v)
+                else:
+                    dict_b[k] = v + 1
+
+        cases = (
+
+            ({'a': 2},
+             {'a': 3, 'b': {'c': 0}},
+             operator.add,
+             {'a': 5, 'b': {'c': 0}}),
+
+            ({'a': 2},
+             {'a': 3, 'b': {'c': {'d': 0}}},
+             operator.add,
+             {'a': 5, 'b': {'c': {'d': 0}}}),
+
+            ({'a': 2, 'b': {'c': 0}},
+             {'a': 3, 'b': {'c': 0}},
+             operator.add,
+             {'a': 5, 'b': {'c': 0}},)
+
+
+        )
+
+        for a, b, op, expected in cases:
+            result = dictutil.combine(a, b, op)
+            self.assertDictEqual(result, expected)
+
+            add_value(a)
+            for k, v in a.items():
+                if isinstance(v, dict):
+                    self.assertNotEqual(a[k], result[k])
+
+            add_value(b)
+            for k, v in b.items():
+                if isinstance(v, dict):
+                    self.assertNotEqual(b[k], result[k])
+
+
+
+class TestDictutil(unittest.TestCase):
+
+    def test_subdict(self):
+
+        source_dict = {0: '0', 'a': 'a', 'none': None}
+
+        default_dict = {'b': 'b', 'c': 'c'}
+
+        def iter_default(k):
+            return default_dict.get(k)
+
+        def iter_keys():
+            for i in (0, 'a', 'b'):
+                yield i
+
+        cases = (
+            (
+                ('a', 0),
+                {
+                    'use_default': True,
+                },
+                {0: '0', 'a': 'a'},
+                'normal',
+            ),
+            (
+                ('a', 'b'),
+                {
+                    'use_default': True,
+                    'default': 0,
+                },
+                {'a': 'a', 'b': 0},
+                'use default',
+            ),
+            (
+                ('b', 'c'),
+                {
+                    'use_default': True,
+                    'default': iter_default,
+                },
+                {'b': 'b', 'c': 'c'},
+                'use default as callable',
+            ),
+            (
+                ('b', 'c'),
+                {
+                    'use_default': False,
+                    'default': iter_default,
+                },
+                {},
+                'not use default',
+            ),
+            (
+                iter_keys(),
+                {
+                    'use_default': True,
+                },
+                {0: '0', 'a': 'a', 'b': None},
+                'use keys as interable',
+            ),
+            (
+                ('none',),
+                {
+                    'use_default': True,
+                    'default': 'not None',
+                },
+                {'none': None},
+                'key exists and is None',
+            ),
+        )
+
+        for flds, kwargs, expected, msg in cases:
+            dd('msg: ', msg)
+            dd('expected: ', expected)
+            rst = dictutil.subdict(source_dict, flds, **kwargs)
+            dd('result:   ', rst)
+
+            self.assertEqual(expected, rst)
+
+        test_dict = {'test': 0}
+        source_dict['copy'] = test_dict
+        deepcopy_cases = (
+            (
+                ('copy',),
+                {
+                    'deepcopy': True,
+                },
+                {'copy': {'test': 0}},
+                'test deepcopy value',
+            ),
+            (
+                ('copy',),
+                {},
+                {'copy': test_dict},
+                'test reference value',
+            ),
+
+            (
+                ('default',),
+                {
+                    'use_default': True,
+                    'default': test_dict,
+                    'deepcopy_default': True,
+                },
+                {'default': {'test': 0}},
+                'test deepcopy default',
+            ),
+            (
+                ('default',),
+                {
+                    'use_default': True,
+                    'default': test_dict,
+                },
+                {'default': test_dict},
+                'test reference default',
+            ),
+            (
+                ('copy', 'default'),
+                {
+                    'use_default': True,
+                    'default': test_dict,
+                    'deepcopy': True,
+                },
+                {
+                    'copy': {'test': 0},
+                    'default': test_dict,
+                },
+                'test deepcopy value and reference default',
+            ),
+            (
+                ('copy', 'default'),
+                {
+                    'use_default': True,
+                    'default': test_dict,
+                    'deepcopy_default': True,
+                },
+                {
+                    'copy': test_dict,
+                    'default': {'test': 0},
+                },
+                'test reference value and deepcopy default',
+            ),
+        )
+
+        for flds, kwargs, expected, msg in deepcopy_cases:
+            dd('msg :', msg)
+            dd('expected: ', expected)
+
+            rst = dictutil.subdict(source_dict, flds, **kwargs)
+
+            dd('result:   ', rst)
+
+            self.assertEqual(expected, rst)
+
+            if 'deepcopy' not in kwargs:
+                for k in [x for x in flds if x in source_dict]:
+                    self.assertIs(expected[k], rst[k])
+
+            if 'deepcopy_default' not in kwargs:
+                for k in [x for x in flds if x not in source_dict]:
+                    self.assertIs(expected[k], rst[k])
+
+class UserDefinedType(object):
+
+    def __init__(self, value=None):
+        self.value = value
+
+
+class ForTestDict(dictutil.FixedKeysDict):
+
+    keys_default = {
+        'key_1': str,
+        'key_2': int,
+        'key_3': dict,
+        'key_4': UserDefinedType,
+    }
+
+    ident_keys = ('key_2', 'key_1')
+
+
+class StrictFixedKeysDictFoo(dictutil.FixedKeysDict):
+    keys_default = {
+        # Does not accept default value.
+        # Must specified when init it.
+        'foo': lambda a: a
+    }
+
+
+class TestFixedKeysDict(unittest.TestCase):
+
+    def setUp(self):
+        pass
+
+    def test_strict(self):
+        self.assertRaises(TypeError, StrictFixedKeysDictFoo, {})
+
+        # ok
+        foo = StrictFixedKeysDictFoo(foo=1)
+
+    def test_fixed_keys_dict(self):
+
+        cases = (
+            (('10.1', 32, {'a': 1}, 'user_value'),  (32, '10.1')),
+            ((10.1, '32', {'a': 1}, 'user_value'),  (32, '10.1')),
+            ((10.1, '32', [('a',1)], 'user_value'), (32, '10.1')),
+
+            ((10.1, '32', [('a',1)]), (32, '10.1')),
+            ((10.1,), (0, '10.1')),
+            ((), (0, '')),
+        )
+
+        for case, ident in cases:
+
+            argkv = {}
+            for i in range(len(case)):
+                argkv['key_'+str(i+1)] = case[i]
+
+            d = ForTestDict(argkv)
+            self.assertEqual(d.ident(), ident)
+
+            d = ForTestDict(**argkv)
+            self.assertEqual(d.ident(), ident)
+
+            self.assertIsInstance(d['key_4'], UserDefinedType)
+
+    def test_key_value_error(self):
+
+        case = {
+            'key_0': 0,
+            'key_1': 10.1,
+            'key_2': 32,
+        }
+
+        def _init():
+            return ForTestDict(**case)
+        self.assertRaises(KeyError, _init)
+
+        case = {
+            'key_1': 10.1,
+            'key_2': 32,
+        }
+        d = ForTestDict(case)
+        def _set():
+            d['key_2'] = 10
+            d['key_0'] = 10
+        self.assertRaises(KeyError, _set)
+        self.assertEqual(d['key_2'], 10)
+
+        case = {
+            'key_1': 10.1,
+            'key_2': 32,
+        }
+        d = ForTestDict(case)
+        def _set():
+            d['key_2'] = '32.0'
+        self.assertRaises(ValueError, _set)
+        def _set():
+            d['key_3'] = UserDefinedType(10)
+        self.assertRaises(ValueError, _set)
+
+    def test_ident(self):
+        d = {
+            'key_1': '10.1',
+            'key_2': '32',
+            'key_3': {'a': 1},
+        }
+        d = ForTestDict(d)
+
+        cases = (
+            ((), ()),
+            (('key_1',), ('10.1',)),
+            (('key_1', 'key_2'), ('10.1', 32)),
+            (('key_1', 'key_2', 'key_3'), ('10.1', 32, {'a': 1})),
+
+            (('key_3', 'key_1', 'key_2'), ({'a': 1}, '10.1', 32)),
+        )
+
+        for ident_keys, ident in cases:
+            d.ident_keys = ident_keys
+            self.assertEqual(d.ident(), ident)
+
+    def test_ident_keyerror(self):
+        d = {
+            'key_1': '10.1',
+            'key_2': '32',
+        }
+        d = ForTestDict(d)
+
+        d.ident_keys = ('no_such_key',)
+        def _ident():
+            return d.ident()
+        self.assertRaises(KeyError, _ident)

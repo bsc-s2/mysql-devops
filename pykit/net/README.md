@@ -24,6 +24,8 @@
   - [net.is_pub](#netis_pub)
   - [net.is_ip4](#netis_ip4)
   - [net.parse_ip_regex_str](#netparse_ip_regex_str)
+  - [net.ip_to_num](#netip_to_num)
+  - [net.num_to_ip](#netnum_to_ip)
 - [Commandline Tool](#commandline-tool)
   - [ip](#ip)
   - [devcie](#devcie)
@@ -84,6 +86,27 @@ Exception for an unreachable ip.
 
 
 #   Methods
+
+
+##  net.choose_ips
+
+**syntax**:
+`net.choose_ips(ips, ip_type=None)`
+
+**arguments**:
+
+-   `ips`:
+    is a list of ips to choose from.
+
+-   `ip_type`:
+
+    - `net.PUB`: returns a list of public ip from `ips`.
+    - `net.INN`: returns a list of internal ip from `ips`.
+    - `None`: returns the original list.
+    - Other value: raise `ValueError`.
+
+**return**:
+list of chosen ips.
 
 
 ##  net.choose_by_idc
@@ -338,6 +361,28 @@ Each one in the result list should be a regex string.
 
 **return**:
 a list of regex string.
+
+
+## net.ip_to_num
+
+**syntax**:
+`net.ip_to_num(ip)`
+
+It converts the IP to 4-byte integer
+
+**return**:
+a 4-byte integer.
+
+
+## net.num_to_ip
+
+**syntax**:
+`net.num_to_ip(ip_num)`
+
+It converts the 4-byte integer to IP
+
+**return**:
+IP.
 
 
 #   Commandline Tool

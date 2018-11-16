@@ -5,6 +5,7 @@ import binascii
 import errno
 import hashlib
 import os
+import re
 import sys
 import time
 
@@ -68,9 +69,9 @@ def get_device_fs(device):
         return 'unknown'
 
 
-def get_disk_partitions():
+def get_disk_partitions(all=True):
 
-    partitions = psutil.disk_partitions(all=True)
+    partitions = psutil.disk_partitions(all=all)
 
     by_mount_point = {}
     for pt in partitions:
@@ -158,22 +159,51 @@ def makedirs(*paths, **kwargs):
         raise
 
 
+def get_sub_dirs(path):
+    files = os.listdir(path)
+
+    sub_dirs = []
+    for f in files:
+        if os.path.isdir(os.path.join(path, f)):
+            sub_dirs.append(f)
+
+    sub_dirs.sort()
+
+    return sub_dirs
+
+
+def list_fns(path, pattern='.*'):
+
+    fns = os.listdir(path)
+
+    pt = re.compile(pattern)
+
+    fns = [ x for x in fns
+            if re.search(pt, x) is not None
+            and os.path.isfile(os.path.join(path, x))
+    ]
+
+    fns.sort()
+
+    return fns
+
+
 def read_file(path):
     with open(path, 'r') as f:
         return f.read()
 
 
-def write_file(path, fcont, uid=None, gid=None, atomic=False):
+def write_file(path, fcont, uid=None, gid=None, atomic=False, fsync=True):
 
     if not atomic:
-        return _write_file(path, fcont, uid, gid)
+        return _write_file(path, fcont, uid, gid, fsync)
 
     tmp_path = '{path}._tmp_.{pid}_{timestamp}'.format(
         path=path,
         pid=os.getpid(),
         timestamp=timeutil.ns(),
     )
-    _write_file(tmp_path, fcont, uid, gid)
+    _write_file(tmp_path, fcont, uid, gid, fsync)
 
     try:
         os.rename(tmp_path, path)
@@ -182,7 +212,7 @@ def write_file(path, fcont, uid=None, gid=None, atomic=False):
         raise
 
 
-def _write_file(path, fcont, uid=None, gid=None):
+def _write_file(path, fcont, uid=None, gid=None, fsync=True):
 
     uid = uid or config.uid
     gid = gid or config.gid
@@ -190,7 +220,8 @@ def _write_file(path, fcont, uid=None, gid=None):
     with open(path, 'w') as f:
         f.write(fcont)
         f.flush()
-        os.fsync(f.fileno())
+        if fsync:
+            os.fsync(f.fileno())
 
     if uid is not None and gid is not None:
         os.chown(path, uid, gid)

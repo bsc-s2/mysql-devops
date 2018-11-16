@@ -46,6 +46,21 @@ class TestUTFJson(unittest.TestCase):
         self.assertEqual('\xbb', rst)
         self.assertEqual(str, type(rst))
 
+    def test_load_backslash_x_encoded(self):
+
+        s = '"\\x61"'
+        self.assertEqual('a', utfjson.load(s))
+
+        s = '"\\X61"'
+        self.assertEqual('a', utfjson.load(s))
+
+        s = '"\\xe6\\x88\\x91"'
+        self.assertEqual('我', utfjson.load(s))
+
+        self.assertRaises(utfjson.JSONDecodeError, utfjson.load, '"\\"')
+        self.assertRaises(utfjson.JSONDecodeError, utfjson.load, '"\\x"')
+        self.assertRaises(utfjson.JSONDecodeError, utfjson.load, '"\\x6"')
+
     def test_load_decode(self):
         self.assertEqual('我', utfjson.load('"我"'))
         self.assertEqual(u'我', utfjson.load('"我"', encoding='utf-8'))
@@ -90,3 +105,8 @@ class TestUTFJson(unittest.TestCase):
 
         # encoded chars and unicode chars in one string
         self.assertEqual('/aaa\xe7\x89\x88\xe6\x9c\xac/jfkdsl\x01', utfjson.load('"\/aaa\xe7\x89\x88\xe6\x9c\xac\/jfkdsl\u0001"'))
+
+        self.assertEqual(
+            '{\n  "\xe6\x88\x91": "\xe6\x88\x91"\n}', utfjson.dump({"我":  "我"}, indent=2))
+        self.assertEqual(
+            '{\n    "\xe6\x88\x91": "\xe6\x88\x91"\n}', utfjson.dump({"我":  "我"}, indent=4))

@@ -16,7 +16,8 @@
     - [Cat.iterate](#catiterate)
     - [Cat.cat](#catcat)
     - [Cat.stat_path](#catstat_path)
-- [Methods](#methods)
+    - [Cat.reset_stat](#catreset_stat)
+- [File system operation methods](#file-system-operation-methods)
   - [fsutil.assert_mountpoint](#fsutilassert_mountpoint)
   - [fsutil.get_all_mountpoint](#fsutilget_all_mountpoint)
   - [fsutil.get_device](#fsutilget_device)
@@ -24,13 +25,18 @@
   - [fsutil.get_disk_partitions](#fsutilget_disk_partitions)
   - [fsutil.get_mountpoint](#fsutilget_mountpoint)
   - [fsutil.get_path_fs](#fsutilget_path_fs)
-  - [fsutil.get_path_inode_usage](#fsutilget_path_inode_usage)
-  - [fsutil.get_path_usage](#fsutilget_path_usage)
+  - [fsutil.get_sub_dirs](#fsutilget_sub_dirs)
+  - [fsutil.list_fns](#fsutillist_fns)
   - [fsutil.makedirs](#fsutilmakedirs)
   - [fsutil.read_file](#fsutilread_file)
   - [fsutil.remove](#fsutilremove)
   - [fsutil.write_file](#fsutilwrite_file)
   - [fsutil.calc_checksums](#fsutilcalc_checksums)
+- [Stat methods](#stat-methods)
+  - [fsutil.get_path_inode_usage](#fsutilget_path_inode_usage)
+  - [fsutil.get_path_usage](#fsutilget_path_usage)
+  - [fsutil.iostat](#fsutiliostat)
+    - [Implementation](#implementation)
 - [Author](#author)
 - [Copyright and License](#copyright-and-license)
 
@@ -121,7 +127,8 @@ offset, or it scan from the first byte.
 
 
 **syntax**:
-`Cat(fn, handler=None, file_end_handler=None, exclusive=True, id=None, strip=False)`
+`Cat(fn, handler=None, file_end_handler=None, exclusive=True,
+        id=None, strip=False, read_chunk_size=16*1024**2)`
 
 **arguments**:
 
@@ -164,6 +171,12 @@ offset, or it scan from the first byte.
 
     By default it is `False`.
 
+-   `read_chunk_size`:
+    is the buffer size to read data once, appropriate small `read_chunk_size`
+    will return stream data quickly.
+
+    By default it is `16*1024**2`.
+
 **config**:
 
 -   `cat_stat_dir`:
@@ -202,6 +215,47 @@ Make a generator to yield every line.
 
     By default it is 3600.
 
+-   `default_seek`:
+    specify a default offset when the last scanned offset is not avaliable
+    or not valid.
+
+    Not avaliable mean the stat file used to store the scanning offset is
+    not exist or has broken. For example, when it is the first time to
+    scan a file, the stat file will not exist.
+
+    Not valid mean the info stored in stat file is not for the file we are
+    about to scan, this will happen when the same file is deleted and then
+    created, the info stored in stat file is for the deleted file not for
+    the created new file.
+
+    We will also treat the last offset stored in stat file as not valid
+    if it is too small than the file size when you set `default_seek`
+    to a negative number. And the absolute value of `default_seek` is
+    the maximum allowed difference.
+
+    It can take following values:
+
+    -   fsutil.SEEK_START:
+        scan from the beginning of the file.
+
+    -   fsutil.SEEK_END:
+        scan from the end of the file, mean only new data will be scanned.
+
+    -   `x`(a positive number, includes `0`).
+        scan from offset `x`.
+
+    -   `-x`(a negative number).
+        it is used to specify the maximum allowed difference between last
+        offset and file size. If the difference is bigger than `x`, then
+        scan from `x` bytes before the end of the file, not scan from the
+        last offset.
+
+        This is usefull when you want to scan from near the end of the file.
+        Use `fsutil.SEEK_END` can not solve the problem, because it only
+        take effect when the last offset is not avaliable.
+
+    By default it is `fsutil.SEEK_START`.
+
 **return**:
 a generator.
 
@@ -209,7 +263,6 @@ a generator.
 
 -   `NoSuchFile`: if file does not present before `timeout`.
 -   `NoData`: if file does not have un-scanned data before `timeout`.
-
 
 ###  Cat.cat
 
@@ -222,7 +275,6 @@ let `Cat.handler` to deal with each line.
 **return**:
 Nothing.
 
-
 ###  Cat.stat_path
 
 Returns the full path of the file to store scanning offset.
@@ -233,8 +285,17 @@ Returns the full path of the file to store scanning offset.
 **return**:
 string
 
+###  Cat.reset_stat
 
-# Methods
+Remove the file used to store scanning offset.
+
+**syntax**:
+`Cat.reset_stat()`
+
+**return**:
+Nothing
+
+# File system operation methods
 
 ##  fsutil.assert_mountpoint
 
@@ -307,12 +368,16 @@ the file-system name, such as `ext4` or `hfs`.
 ##  fsutil.get_disk_partitions
 
 **syntax**:
-`fsutil.get_disk_partitions()`
+`fsutil.get_disk_partitions(all=True)`
 
 Find and return all mounted path and its mount point information in a
 dictionary.
 
-All mount points including non-disk path are also returned.
+**arguments**:
+
+-   `all`:
+    By default it is `True` thus all mount points including non-disk path are also returned,
+    otherwise `tmpfs` or `/proc` are not returned.
 
 **return**:
 an dictionary indexed by mount point path:
@@ -372,67 +437,39 @@ Return the name of device where the `path` is mounted.
 the file-system name, such as `ext4` or `hfs`.
 
 
-##  fsutil.get_path_inode_usage
+##  fsutil.get_sub_dirs
 
 **syntax**:
-`fsutil.get_path_inode_usage(path)`
+`fsutil.get_sub_dirs(path)`
 
-Collect inode usage information of the file system `path` is mounted on.
-
-**arguments**:
-
-- `path`:
-specifies the fs - path to collect usage info.
-Such as `/tmp` or `/home/alice`.
-
-**return**:
-a dictionary in the following format:
-
-```json
-{
-    'total':     total number of inode,
-    'used':      used inode(includes inode reserved for super user),
-    'available': total - used,
-    'percent':   float(used) / 'total'
-}
-```
-
-
-##  fsutil.get_path_usage
-
-**syntax**:
-`fsutil.get_path_usage(path)`
-
-Collect space usage information of the file system `path` is mounted on.
+Get all sorted sub directories of `path`.
 
 **arguments**:
 
 -   `path`:
-    specifies the fs-path to collect usage info.
-    Such as `/tmp` or `/home/alice`.
+    is the directory path.
 
 **return**:
-a dictionary in the following format:
+a list contain all sub directory names.
 
-```
-{
-    'total':     total space in byte,
-    'used':      used space in byte(includes space reserved for super user),
-    'available': total - used,
-    'percent':   float(used) / 'total',
-}
-```
 
-There two concept for unused space: `free` and `available`
-because some file systems have a reserved(maybe 5%) for super user like `root`:
+##  fsutil.list_fns
 
-- free:      with    blocks reserved for super users.
+**syntax**:
+`fsutil.list_fns(path, pattern='.*')`
 
-- available: without blocks reserved for super users.
+List all files with `pattern` in `path`.
 
-Since most of the time an application can not run as `root`
-then it can not use the reserved space.
-Thus this function provides with the `available` bytes by default.
+**arguments**:
+
+-   `path`:
+    is a directory path.
+
+-   `pattern`:
+    is the file name pattern wanted. A regular expression.
+
+**return**:
+a alphabetical sorted list contain all file name in `path` with `pattern`.
 
 
 ##  fsutil.makedirs
@@ -512,7 +549,7 @@ Nothing
 ##  fsutil.write_file
 
 **syntax**:
-`fsutil.write_file(path, content, uid=None, gid=None, atomic=False)`
+`fsutil.write_file(path, content, uid=None, gid=None, atomic=False, fsync=True)`
 
 Write `content` to file `path`.
 
@@ -538,6 +575,9 @@ Write `content` to file `path`.
     `timeutil.ns()`, it is not atomic if the temporary files of same path
     created at the same nanosecond.
     The renaming will be an atomic operation (this is a POSIX requirement).
+
+-   `fsync`:
+    specify if need to synchronize data to storage device.
 
 **return**:
 Nothing
@@ -586,6 +626,138 @@ print fsutil.calc_checksums(file_name, sha1=True, md5=True, crc32=False, sha256=
 
 **return**:
 a dict with keys `sha1` and `md5` and `crc32` and `sha256`.
+
+
+#   Stat methods
+
+##  fsutil.get_path_inode_usage
+
+**syntax**:
+`fsutil.get_path_inode_usage(path)`
+
+Collect inode usage information of the file system `path` is mounted on.
+
+**arguments**:
+
+- `path`:
+specifies the fs - path to collect usage info.
+Such as `/tmp` or `/home/alice`.
+
+**return**:
+a dictionary in the following format:
+
+```json
+{
+    'total':     total number of inode,
+    'used':      used inode(includes inode reserved for super user),
+    'available': total - used,
+    'percent':   float(used) / 'total'
+}
+```
+
+
+##  fsutil.get_path_usage
+
+**syntax**:
+`fsutil.get_path_usage(path)`
+
+Collect space usage information of the file system `path` is mounted on.
+
+**arguments**:
+
+-   `path`:
+    specifies the fs-path to collect usage info.
+    Such as `/tmp` or `/home/alice`.
+
+**return**:
+a dictionary in the following format:
+
+```
+{
+    'total':     total space in byte,
+    'used':      used space in byte(includes space reserved for super user),
+    'available': total - used,
+    'percent':   float(used) / 'total',
+}
+```
+
+There two concept for unused space: `free` and `available`
+because some file systems have a reserved(maybe 5%) for super user like `root`:
+
+- free:      with    blocks reserved for super users.
+
+- available: without blocks reserved for super users.
+
+Since most of the time an application can not run as `root`
+then it can not use the reserved space.
+Thus this function provides with the `available` bytes by default.
+
+
+##  fsutil.iostat
+
+**syntax**:
+`fsutil.iostat(device=None, path=None, stat_path=None)`
+
+Collect IO stat.
+
+**Synopsis**:
+
+```python
+print fsutil.iostat('/dev/sda1') # {'read': 6151, 'write': 34073, 'ioutil': 0}
+print fsutil.iostat(path='/')    # {'read': 6151, 'write': 34073, 'ioutil': 100}
+```
+
+It accepts either `device` or `path` as target to collect IO stat from:
+
+-   `device` should be a path starts with `/dev`, such as `/dev/sda1`.
+
+-   `path` is any path on a valid mounted fs. If `path` is used and `device` is
+    `None`, it uses the device on which the `path` is mounted.
+
+One must specify either `device` or `path`.
+
+
+### Implementation
+
+`/proc/diskstats` provides accumulated IO stat since a host boots up.
+Such as total count of read/write operation on a disk.
+
+This function records changes in `/proc/diskstats` and calculates the diff
+between two recorded stat as return value.
+
+`fsutil.iostat` reads instant IO stat from `/proc/diskstats` and save it in
+`stat_path`. When next time `fsutil.iostat` is called, it calculates the
+difference between the current stat from `/proce/diskstats` and the saved stat.
+
+If no previous recorded stat saved in `stat_path`, it waits a second and load
+`/proc/diskstats` again, and calculate the diff.
+
+**arguments**:
+
+-   `device`:
+    specifies from which device to collect IO stat.
+
+-   `path`:
+    specifies from which fs path to collect IO stat.
+
+-   `stat_path`:
+    specifies where to store and load IO stat.
+
+    By default it is `None`, then it uses `config.iostat_stat_path`(`/tmp/pykit-iostat`) to save
+    stat.
+
+**return**:
+a dict contains 3 field:
+```json
+{
+'read': 6151,
+'write': 34073,
+'ioutil': 0
+}
+```
+
+`read` and `write` is in byte/second.
+`ioutil` is a percentage number between 0 and 100.
 
 
 #   Author
