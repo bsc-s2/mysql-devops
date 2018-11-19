@@ -1,11 +1,11 @@
 #!/usr/bin/env python2
 # coding: utf-8
 
+import argparse
+import json
+import logging
 import os
 import sys
-import argparse
-import logging
-import json
 
 from pykit import humannum
 from pykit import jobq
@@ -24,11 +24,15 @@ if __name__ == "__main__":
     logutil.add_std_handler(rootlogger, stream=sys.stdout)
     rootlogger.handlers[1].setLevel(logging.WARN)
 
-    parser = argparse.ArgumentParser(description='run commands for one or more ports concurrenty')
+    parser = argparse.ArgumentParser(
+        description='run commands for one or more ports concurrenty')
 
-    parser.add_argument('--conf-base', type=str, required=False,  help='base path to config file')
-    parser.add_argument('--conf-fn',   type=str, required=False,  help='conf file name for each port')
-    parser.add_argument('--jobs',      type=int, required=False, default=1, help='nr of threads to run')
+    parser.add_argument('--conf-base', type=str,
+                        required=False,  help='base path to config file')
+    parser.add_argument('--conf-fn',   type=str, required=False,
+                        help='conf file name for each port')
+    parser.add_argument('--jobs',      type=int, required=False,
+                        default=1, help='nr of threads to run')
     parser.add_argument('--cmd',       type=str, required=True,  choices=[
         'backup',
         'catchup',
@@ -44,26 +48,39 @@ if __name__ == "__main__":
         'table_size',
         'user',
     ], help='command to run')
-    parser.add_argument('--ports',     type=int, required=False, nargs='*', help='ports to run "cmd" on')
-    parser.add_argument('--db',        type=str, required=False, help='specifies db name to run command on')
-    parser.add_argument('--human',     action='store_true', required=False,  help='print result for human')
-    parser.add_argument('--full',      action='store_true', required=False,  help='do not reduce any info when display')
-    parser.add_argument('--size',      type=str, required=False,  help='specify size filter expression e.g.: ">10M"')
-    parser.add_argument('--sortby',    type=str, required=False,  choices=['free', 'total', 'used'], help='sort by')
+    parser.add_argument('--ports',     type=int, required=False,
+                        nargs='*', help='ports to run "cmd" on')
+    parser.add_argument('--db',        type=str, required=False,
+                        help='specifies db name to run command on')
+    parser.add_argument('--human',     action='store_true',
+                        required=False,  help='print result for human')
+    parser.add_argument('--full',      action='store_true',
+                        required=False,  help='do not reduce any info when display')
+    parser.add_argument('--size',      type=str, required=False,
+                        help='specify size filter expression e.g.: ">10M"')
+    parser.add_argument('--sortby',    type=str, required=False,
+                        choices=['free', 'total', 'used'], help='sort by')
 
     # for command query
-    parser.add_argument('--sql',       type=str, required=False,  help='sql in string')
+    parser.add_argument('--sql',       type=str,
+                        required=False,  help='sql in string')
 
     # options for command 'user'
-    parser.add_argument('--username',  type=str, required=False,  help='user name to create')
-    parser.add_argument('--password',  type=str, required=False,  help='login password')
-    parser.add_argument('--host',      type=str, required=False, default='%', help='user host')
-    parser.add_argument('--privilege', type=str, required=False, default='*.*:readwrite', help='privilege in form of "my_db.my_table:SELECT,UPDATE"')
-    parser.add_argument('--binlog',    type=int, required=False, choices=[0, 1], help='generate binlog for user created')
+    parser.add_argument('--username',  type=str,
+                        required=False,  help='user name to create')
+    parser.add_argument('--password',  type=str,
+                        required=False,  help='login password')
+    parser.add_argument('--host',      type=str,
+                        required=False, default='%', help='user host')
+    parser.add_argument('--privilege', type=str, required=False, default='*.*:readwrite',
+                        help='privilege in form of "my_db.my_table:SELECT,UPDATE"')
+    parser.add_argument('--binlog',    type=int, required=False,
+                        choices=[0, 1], help='generate binlog for user created')
 
-
-    parser.add_argument('--date-str',            action='store', help='date in form 2017_01_01. It is used in backup file name, or to specify which backup to use for restore. when absent, use date of today')
-    parser.add_argument('--clean-after-restore', action='store_true', help='clean backup files after restore')
+    parser.add_argument('--date-str',            action='store',
+                        help='date in form 2017_01_01. It is used in backup file name, or to specify which backup to use for restore. when absent, use date of today')
+    parser.add_argument('--clean-after-restore', action='store_true',
+                        help='clean backup files after restore')
 
     args = parser.parse_args()
     logger.info('command:' + str(args))
@@ -79,7 +96,7 @@ if __name__ == "__main__":
     if ports is None:
         ports = os.listdir(args.conf_base)
 
-        ports = [int(x) 
+        ports = [int(x)
                  for x in ports
                  if x.isdigit()]
         ports.sort()
@@ -105,9 +122,9 @@ if __name__ == "__main__":
     def _worker(port):
 
         conf_path = '{conf_base}/{port}/{conf_fn}.yaml'.format(
-                conf_base=args.conf_base,
-                conf_fn=args.conf_fn,
-                port=port)
+            conf_base=args.conf_base,
+            conf_fn=args.conf_fn,
+            port=port)
 
         conf = mysqlbackup.load_conf_from_file(conf_path)
 
@@ -130,7 +147,6 @@ if __name__ == "__main__":
         elif cmd == 'restore':
             if mb.has_data_dir():
                 logger.info('data-dir presents, skip restore_from_backup')
-                pass
             else:
                 mb.restore_from_backup()
             mb.catchup()
@@ -138,7 +154,6 @@ if __name__ == "__main__":
         elif cmd == 'restore_from_backup':
             if mb.has_data_dir():
                 logger.info('data-dir presents, skip restore_from_backup')
-                pass
             else:
                 mb.restore_from_backup()
         elif cmd == 'catchup':
@@ -172,8 +187,8 @@ if __name__ == "__main__":
 
             if args.human:
                 mapping = {
-                        'onlyleft': 'OnlyIHave',
-                        'onlyright': 'IDontHave'
+                    'onlyleft': 'OnlyIHave',
+                    'onlyright': 'IDontHave'
                 }
                 hm = []
                 for k, diff in rst.items():
@@ -185,10 +200,10 @@ if __name__ == "__main__":
                             continue
                         d = diff[side]
                         line = '{k:>24}: {side:>10}: {length:>10}: {rs}'.format(
-                                k=k,
-                                side=mapping[side],
-                                length=d['length'],
-                                rs=str(d['gtidset']))
+                            k=k,
+                            side=mapping[side],
+                            length=d['length'],
+                            rs=str(d['gtidset']))
                         hm.append(line)
 
                 def _out():
@@ -198,6 +213,7 @@ if __name__ == "__main__":
             return rst
         elif cmd == 'table_size':
             rsts = mb.table_sizes(args.db, args.sortby)
+
             def _out():
                 print port, args.db
                 for _repr, tbl_stat in rsts:
@@ -242,5 +258,3 @@ if __name__ == "__main__":
         sys.exit(0)
     else:
         sys.exit(1)
-
-

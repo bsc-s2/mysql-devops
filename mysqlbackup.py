@@ -20,21 +20,19 @@ import subprocess
 import sys
 import time
 
-import boto3
-import MySQLdb
 import yaml
-
-from boto3.s3.transfer import TransferConfig
-from botocore.exceptions import ClientError
-from boto3.exceptions import S3UploadFailedError
-
-from botocore.client import Config
-
+from pykit import humannum
+from pykit import logutil
 from pykit import mysqlconnpool
 from pykit import mysqlutil
 from pykit import timeutil
-from pykit import logutil
-from pykit import humannum
+
+import boto3
+import MySQLdb
+from boto3.exceptions import S3UploadFailedError
+from boto3.s3.transfer import TransferConfig
+from botocore.client import Config
+from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +64,7 @@ class MysqlBackup(object):
 
         if 'root_password' in self.bkp_conf:
             self.mysql_addr.update({
-                    'passwd': self.bkp_conf['root_password'],
+                'passwd': self.bkp_conf['root_password'],
             })
 
         self.mysql_conn_pool = mysqlconnpool.make(self.mysql_addr)
@@ -90,11 +88,11 @@ class MysqlBackup(object):
                   ' password: {password}'
                   ' privileges: {privileges}'
                   ' binlog: {binlog}'.format(
-                          username=username,
-                          password=password,
-                          host=host,
-                          privileges=privileges,
-                          binlog=binlog))
+                      username=username,
+                      password=password,
+                      host=host,
+                      privileges=privileges,
+                      binlog=binlog))
 
         username = MySQLdb.escape_string(username)
         password = MySQLdb.escape_string(password)
@@ -115,27 +113,27 @@ class MysqlBackup(object):
                 self.mysql_pool_query(pool, 'SET SQL_LOG_BIN=0')
 
             rst = self.mysql_pool_query(
-                    pool,
-                    'SELECT `Host`, `User` FROM `mysql`.`user`'
-                    ' WHERE `Host`="{host}" AND `User`="{username}"'.format(
-                            host=host,
-                            username=username))
+                pool,
+                'SELECT `Host`, `User` FROM `mysql`.`user`'
+                ' WHERE `Host`="{host}" AND `User`="{username}"'.format(
+                    host=host,
+                    username=username))
 
             if len(rst) == 0:
                 self.mysql_pool_query(
-                        pool,
-                        'CREATE USER "{username}"@"{host}" IDENTIFIED BY "{password}"'.format(
-                                host=host,
-                                username=username,
-                                password=password))
+                    pool,
+                    'CREATE USER "{username}"@"{host}" IDENTIFIED BY "{password}"'.format(
+                        host=host,
+                        username=username,
+                        password=password))
             else:
                 # user exists, just set password
                 self.mysql_pool_query(
-                        pool,
-                        'SET PASSWORD FOR "{username}"@"{host}" = "{password}"'.format(
-                                host=host,
-                                username=username,
-                                password=password))
+                    pool,
+                    'SET PASSWORD FOR "{username}"@"{host}" = "{password}"'.format(
+                        host=host,
+                        username=username,
+                        password=password))
 
             for tbl, prv in privileges:
 
@@ -150,12 +148,12 @@ class MysqlBackup(object):
                 prv = ','.join(prv)
 
                 self.mysql_pool_query(
-                        pool,
-                        'GRANT {prv} ON {tbl} TO "{username}"@"{host}"'.format(
-                                host=host,
-                                username=username,
-                                prv=prv,
-                                tbl=tbl))
+                    pool,
+                    'GRANT {prv} ON {tbl} TO "{username}"@"{host}"'.format(
+                        host=host,
+                        username=username,
+                        prv=prv,
+                        tbl=tbl))
 
             self.mysql_pool_query(pool, 'FLUSH PRIVILEGES')
 
@@ -265,7 +263,6 @@ class MysqlBackup(object):
         for sql in sqls:
             self.mysql_pool_query(pool, sql)
 
-
     def _slave_reset(self, pool):
 
         rpl = self.bkp_conf['replication']
@@ -298,7 +295,6 @@ class MysqlBackup(object):
 
             self.mysql_pool_query(pool, sql)
 
-
     def diff_replication(self):
 
         self.assert_instance_is_alive()
@@ -313,10 +309,10 @@ class MysqlBackup(object):
 
         for src in rpl['source']:
             pool = mysqlconnpool.make({
-                    'host': src['host'],
-                    'port': int(src['port']),
-                    'user': rpl['user'],
-                    'passwd': rpl['password'],
+                'host': src['host'],
+                'port': int(src['port']),
+                'user': rpl['user'],
+                'passwd': rpl['password'],
             })
 
             k = '{host}:{port}-[{id}]'.format(**src)
@@ -405,7 +401,8 @@ class MysqlBackup(object):
                 need_optimize = True
 
             if need_optimize:
-                _rsts = pool.query('optimize local table `{Name}`'.format(**rst))
+                _rsts = pool.query(
+                    'optimize local table `{Name}`'.format(**rst))
 
                 self.info('optimize done')
                 for _r in _rsts:
@@ -430,8 +427,8 @@ class MysqlBackup(object):
         hum = humannum.humannum(rst)
         return ('`{Name}` Data_free:{Data_free} / Data_length:{Data_length}'
                 ' = {rate:.3f}').format(
-                        rate=float(rst['Data_free']) / rst['Data_length'],
-                        **hum)
+            rate=float(rst['Data_free']) / rst['Data_length'],
+            **hum)
 
     def get_dbs(self, exclude=None):
 
@@ -453,13 +450,12 @@ class MysqlBackup(object):
 
         return dbs
 
-
     def backup(self):
 
         self.info("backup ...")
 
         self.remove_backup(
-                'remove old backup {backup_tgz_des3} {backup_data_dir} {backup_binlog_dir}')
+            'remove old backup {backup_tgz_des3} {backup_data_dir} {backup_binlog_dir}')
 
         try:
             self.clean_binlog()
@@ -470,8 +466,7 @@ class MysqlBackup(object):
             self.info_r('backup to s3://{s3_bucket}/{s3_key} OK')
         finally:
             self.remove_backup(
-                    'remove backup {backup_tgz_des3} {backup_data_dir} {backup_binlog_dir}')
-
+                'remove backup {backup_tgz_des3} {backup_data_dir} {backup_binlog_dir}')
 
     def clean_binlog(self, before_days=1):
 
@@ -483,7 +478,7 @@ class MysqlBackup(object):
 
         self.mysql_pool_query(pool,
                               'PURGE BINARY LOGS BEFORE "{dt} 00:00:00"'.format(
-                                      dt=dt))
+                                  dt=dt))
 
     def backup_data(self):
 
@@ -596,25 +591,26 @@ class MysqlBackup(object):
 
             try:
                 resp = boto_head(bc,
-                        self.render('{s3_bucket}'),
-                        self.render('{s3_key}')
-                        )
+                                 self.render('{s3_bucket}'),
+                                 self.render('{s3_key}')
+                                 )
             except ClientError as ee:
-                self.error(repr(ee) + 'backup file: {backup_tgz_des3} not found in s2 cloud')
+                self.error(
+                    repr(ee) + 'backup file: {backup_tgz_des3} not found in s2 cloud')
                 raise
 
             if resp['ResponseMetadata']['HTTPStatusCode'] == 200:
                 self.info('backup file: {backup_tgz_des3} already in s2 cloud')
             else:
-                self.error(repr(e) + 'get backup file: {backup_tgz_des3} error')
-                raise S3UploadFailedError(repr(e) + 'while upload backup file failed')
-
+                self.error(
+                    repr(e) + 'get backup file: {backup_tgz_des3} error')
+                raise S3UploadFailedError(
+                    repr(e) + 'while upload backup file failed')
 
     def remove_backup(self, cmd_info):
 
         self.shell_run(cmd_info,
-                'rm -rf {backup_tgz_des3} {backup_data_dir} {backup_binlog_dir}')
-
+                       'rm -rf {backup_tgz_des3} {backup_data_dir} {backup_binlog_dir}')
 
     def restore(self):
 
@@ -633,7 +629,8 @@ class MysqlBackup(object):
     def catchup(self):
 
         if self.bkp_conf['replication'].get('group_replication') == 1:
-            self.info('configured as group replication, do not need to manually catchup')
+            self.info(
+                'configured as group replication, do not need to manually catchup')
             return
 
         self.info_r('catchup start...')
@@ -668,7 +665,6 @@ class MysqlBackup(object):
         if self.bkp_conf['clean_after_restore']:
             self.shell_run('remove backup dir and files',
                            'rm -rf {backup_data_dir} {backup_binlog_dir} {backup_tgz_des3}')
-
 
     def assert_instance_is_down(self):
 
@@ -790,7 +786,8 @@ class MysqlBackup(object):
         binlog_fns = [self.render('{backup_binlog_dir}/') + x
                       for x in binlog_fns]
 
-        self.info('apply only-in-binlog events back to instance, from: ' + repr(binlog_fns))
+        self.info(
+            'apply only-in-binlog events back to instance, from: ' + repr(binlog_fns))
 
         last_binlog_file, last_binlog_pos, gtid_set = self.get_backup_binlog_info()
 
@@ -810,7 +807,8 @@ class MysqlBackup(object):
                             + self._get_arg_password()
                             ),
                            bfn=bfn,
-                           gtid_set_str=mysqlutil.gtidset.dump(gtid_set, line_break=''),
+                           gtid_set_str=mysqlutil.gtidset.dump(
+                               gtid_set, line_break=''),
                            cwd=self.bkp_conf['mysql_base']
                            )
 
@@ -1030,14 +1028,17 @@ class MysqlBackup(object):
             ('backup_tgz_des3_tail',               "mysql-{port}.tgz.des3"),
             ('backup_data_tail',                   "mysql-{port}-backup"),
             ('backup_data_dir',      "{backup_base}/mysql-{port}-backup"),
-            ('backup_my_cnf',        "{backup_base}/mysql-{port}-backup/my.cnf"),
+            ('backup_my_cnf',
+             "{backup_base}/mysql-{port}-backup/my.cnf"),
             ('backup_tgz_des3',     "{backup_base}/{backup_tgz_des3_tail}"),
 
             ('backup_binlog_tail',                 "mysql-{port}-binlog"),
             ('backup_binlog_dir',    "{backup_base}/mysql-{port}-binlog"),
 
-            ('s3_key',               "{date_str}/{port}/{backup_tgz_des3_tail}"),
-            ('mes',                  "{host}:{port} [{instance_id}] {mysql_data_dir}"),
+            ('s3_key',
+             "{date_str}/{port}/{backup_tgz_des3_tail}"),
+            ('mes',
+             "{host}:{port} [{instance_id}] {mysql_data_dir}"),
         ]
 
         for k, v in ptn:
@@ -1056,7 +1057,7 @@ class MysqlBackup(object):
                        ("cp"
                         " {conf_base}/my.cnf"
                         " {mysql_data_dir}/")
-        )
+                       )
         self.chown('{mysql_data_dir}/my.cnf')
 
     def list_binlog_fns(self):
@@ -1260,9 +1261,9 @@ def boto_put(cli, fpath, bucket_name, key_name, extra_args):
 def boto_head(cli, bucket_name, key_name):
 
     resp = cli.head_object(
-            Bucket=bucket_name,
-            Key=key_name,
-            )
+        Bucket=bucket_name,
+        Key=key_name,
+    )
 
     return resp
 
@@ -1327,27 +1328,43 @@ def load_cli_args():
 
     parser = argparse.ArgumentParser(description='mysql backup-restore tool')
 
-    parser.add_argument('--conf-path', action='store', help='path to config file in yaml')
+    parser.add_argument('--conf-path', action='store',
+                        help='path to config file in yaml')
 
     # command line arguments override config file.
 
-    parser.add_argument('--mysql-base',    action='store', help='base dir of mysql executable')
-    parser.add_argument('--host',          action='store', help='name of this host, just as identity of backup file name')
-    parser.add_argument('--data-base',     action='store', help='base dir of mysql data, like /data1')
-    parser.add_argument('--backup-base',   action='store', help='base dir of backup tmp files, like /data1/backup')
-    parser.add_argument('--port',          action='store', help='serving port of the mysql instance to backup/restore')
-    parser.add_argument('--instance-id',   action='store', help='id in number, as part of backup file name, it should be unique in a replication group')
-    parser.add_argument('--date-str',      action='store', help='date in form 2017_01_01. It is used in backup file name, or to specify which backup to use for restore. when absent, use date of today')
-    parser.add_argument('--s3-host',       action='store', help='s3 compatible service hostname to store backup')
-    parser.add_argument('--s3-bucket',     action='store', help='s3 bucket name')
-    parser.add_argument('--s3-access-key', action='store', help='s3 access key')
-    parser.add_argument('--s3-secret-key', action='store', help='s3 secret key')
-    parser.add_argument('--verbose', '-v', action='count', help='output more debug info')
+    parser.add_argument('--mysql-base',    action='store',
+                        help='base dir of mysql executable')
+    parser.add_argument('--host',          action='store',
+                        help='name of this host, just as identity of backup file name')
+    parser.add_argument('--data-base',     action='store',
+                        help='base dir of mysql data, like /data1')
+    parser.add_argument('--backup-base',   action='store',
+                        help='base dir of backup tmp files, like /data1/backup')
+    parser.add_argument('--port',          action='store',
+                        help='serving port of the mysql instance to backup/restore')
+    parser.add_argument('--instance-id',   action='store',
+                        help='id in number, as part of backup file name, it should be unique in a replication group')
+    parser.add_argument('--date-str',      action='store',
+                        help='date in form 2017_01_01. It is used in backup file name, or to specify which backup to use for restore. when absent, use date of today')
+    parser.add_argument('--s3-host',       action='store',
+                        help='s3 compatible service hostname to store backup')
+    parser.add_argument('--s3-bucket',     action='store',
+                        help='s3 bucket name')
+    parser.add_argument('--s3-access-key', action='store',
+                        help='s3 access key')
+    parser.add_argument('--s3-secret-key', action='store',
+                        help='s3 secret key')
+    parser.add_argument('--verbose', '-v', action='count',
+                        help='output more debug info')
 
-    parser.add_argument('--clean-after-restore', action='store_true', help='clean backup files after restore')
+    parser.add_argument('--clean-after-restore', action='store_true',
+                        help='clean backup files after restore')
 
-    parser.add_argument('cmd', type=str, nargs=1, choices=['backup', 'restore', 'catchup_binlog', 'setup_replication'], help='command to run')
-    parser.add_argument('--when', action='store', choices=['no-data-dir', 'stopped'], help='condition that must be satisfied before a command runs')
+    parser.add_argument('cmd', type=str, nargs=1, choices=[
+                        'backup', 'restore', 'catchup_binlog', 'setup_replication'], help='command to run')
+    parser.add_argument('--when', action='store', choices=[
+                        'no-data-dir', 'stopped'], help='condition that must be satisfied before a command runs')
 
     args = parser.parse_args()
     logger.info('args={a}'.format(a=args))
@@ -1393,13 +1410,14 @@ def load_conf(args):
                  's3_secret_key',
 
                  'clean_after_restore',
-    )
+                 )
 
     for k in conf_keys:
         v = getattr(args, k)
         if v is not None:
             conf[k] = v
-            logger.info('add config from command line: {k}={v}'.format(k=k, v=v))
+            logger.info(
+                'add config from command line: {k}={v}'.format(k=k, v=v))
 
     logger.info('conf={c}'.format(c=conf))
 
