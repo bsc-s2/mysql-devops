@@ -27,11 +27,9 @@ from pykit import mysqlconnpool
 from pykit import mysqlutil
 from pykit import timeutil
 
-import boto3
+import botoclient
 import MySQLdb
 from boto3.exceptions import S3UploadFailedError
-from boto3.s3.transfer import TransferConfig
-from botocore.client import Config
 from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
@@ -68,6 +66,10 @@ class MysqlBackup(object):
             })
 
         self.mysql_conn_pool = mysqlconnpool.make(self.mysql_addr)
+
+        self.bc = botoclient.BotoClient(self.bkp_conf['s3_host'],
+                                        self.bkp_conf['s3_access_key'],
+                                        self.bkp_conf['s3_secret_key'])
 
     def create_user(self,
                     username, password,
@@ -463,7 +465,7 @@ class MysqlBackup(object):
             self.backup_binlog()
             self.calc_checksum()
             self.upload_backup()
-            self.info_r('backup to s3://{s3_bucket}/{s3_key} OK')
+            self.info_r('backup to s3://{s3_bucket}/{s3_key_by_date} OK')
         finally:
             self.remove_backup(
                 'remove backup {backup_tgz_des3} {backup_data_dir} {backup_binlog_dir}')
@@ -568,32 +570,26 @@ class MysqlBackup(object):
             self.info('no s3 bucket specified, ignore backup to s3')
             return
 
-        self.info_r('backup to s3://{s3_bucket}/{s3_key} ...')
-
-        bc = boto_client(self.bkp_conf['s3_host'],
-                         self.bkp_conf['s3_access_key'],
-                         self.bkp_conf['s3_secret_key'])
+        self.info_r('backup to s3://{s3_bucket}/{s3_key_by_date} ...')
 
         # boto adds Content-MD5 automatically
         extra_args = {'Metadata': self.bkp_conf['backup_tgz_des3_meta']}
 
         try:
-            boto_put(bc,
-                     self.render('{backup_tgz_des3}'),
-                     self.render('{s3_bucket}'),
-                     self.render('{s3_key}'),
-                     extra_args
-                     )
+            self.bc.boto_put(self.render('{backup_tgz_des3}'),
+                             self.render('{s3_bucket}'),
+                             self.render('{s3_key_by_date}'),
+                             extra_args
+                             )
 
         except S3UploadFailedError as e:
 
             self.info(repr(e) + 'while upload {backup_tgz_des3} to s2 cloud')
 
             try:
-                resp = boto_head(bc,
-                                 self.render('{s3_bucket}'),
-                                 self.render('{s3_key}')
-                                 )
+                resp = self.bc.boto_head(self.render('{s3_bucket}'),
+                                         self.render('{s3_key_by_date}')
+                                         )
             except ClientError as ee:
                 self.error(
                     repr(ee) + 'backup file: {backup_tgz_des3} not found in s2 cloud')
@@ -606,6 +602,15 @@ class MysqlBackup(object):
                     repr(e) + 'get backup file: {backup_tgz_des3} error')
                 raise S3UploadFailedError(
                     repr(e) + 'while upload backup file failed')
+
+        try:
+            self.bc.boto_copy(self.render('{s3_bucket}'),
+                              self.render('{s3_key_by_date}'),
+                              self.render('{se_key_by_port}')
+                              )
+        except ClientError as e:
+            self.info(
+                repr(e) + 'while copy {s3_key_by_date} to {se_key_by_port} failed')
 
     def remove_backup(self, cmd_info):
 
@@ -729,7 +734,8 @@ class MysqlBackup(object):
 
     def download_backup(self):
 
-        self.info_r('download backup from s3://{s3_bucket}/{s3_key} ...')
+        self.info_r(
+            'download backup from s3://{s3_bucket}/{s3_key_by_date} ...')
 
         try:
             os.makedirs(self.render('{backup_base}'), mode=0755)
@@ -739,14 +745,11 @@ class MysqlBackup(object):
             else:
                 raise
 
-        bc = boto_client(self.bkp_conf['s3_host'],
-                         self.bkp_conf['s3_access_key'],
-                         self.bkp_conf['s3_secret_key'])
-        resp = boto_get(bc,
-                        self.render('{backup_tgz_des3}'),
-                        self.render('{s3_bucket}'),
-                        self.render('{s3_key}')
-                        )
+        resp = self.bc.boto_get(
+            self.render('{backup_tgz_des3}'),
+            self.render('{s3_bucket}'),
+            self.render('{s3_key_by_date}')
+        )
 
         self.info_r('downloaded backup to {backup_tgz_des3}')
 
@@ -755,7 +758,8 @@ class MysqlBackup(object):
 
         self.bkp_conf['backup_tgz_des3_meta'] = meta
 
-        self.info_r('download backup from s3://{s3_bucket}/{s3_key} OK')
+        self.info_r(
+            'download backup from s3://{s3_bucket}/{s3_key_by_date} OK')
 
     def apply_local_binlog(self):
 
@@ -1035,8 +1039,10 @@ class MysqlBackup(object):
             ('backup_binlog_tail',                 "mysql-{port}-binlog"),
             ('backup_binlog_dir',    "{backup_base}/mysql-{port}-binlog"),
 
-            ('s3_key',
+            ('s3_key_by_date',
              "{date_str}/{port}/{backup_tgz_des3_tail}"),
+            ('s3_key_by_port',
+             "{port}/{date_str}/{backup_tgz_des3_tail}"),
             ('mes',
              "{host}:{port} [{instance_id}] {mysql_data_dir}"),
         ]

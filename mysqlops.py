@@ -10,8 +10,10 @@ import sys
 from pykit import humannum
 from pykit import jobq
 from pykit import logutil
+from pykit import timeutil
 from pykit import utfjson
 
+import botoclient
 import mysqlbackup
 
 logger = logging.getLogger(__name__)
@@ -47,6 +49,7 @@ if __name__ == "__main__":
         'setup_replication',
         'table_size',
         'user',
+        'check_backup_file',
     ], help='command to run')
     parser.add_argument('--ports',     type=int, required=False,
                         nargs='*', help='ports to run "cmd" on')
@@ -109,6 +112,76 @@ if __name__ == "__main__":
         if v is not None:
             dic[key] = v
 
+    def load_port_conf(port):
+
+        conf_path = '{conf_base}/{port}/{conf_fn}.yaml'.format(
+            conf_base=args.conf_base,
+            conf_fn=args.conf_fn,
+            port=port)
+
+        conf = mysqlbackup.load_conf_from_file(conf_path)
+
+        setdef(conf, 'clean_after_restore', args.clean_after_restore)
+
+        conf.setdefault('date_str', date_str)
+        setdef(conf, 'date_str', args.date_str)
+
+        return conf
+
+    def get_latest_backup_date(port):
+
+        conf = load_port_conf(port)
+
+        bc = botoclient.BotoClient(
+            conf['s3_host'], conf['s3_access_key'], conf['s3_secret_key'])
+
+        backup_files = bc.boto_list(conf['s3_bucket'])
+
+        date_ts = []
+
+        for bf in backup_files:
+            # the backup file has two formats key in s2,
+            # {date_str}/{port}/{backup_tgz_des3_tail} and {port}/{date_str}/{backup_tgz_des3_tail}
+            # We use the first format to get date_str
+            _date_str, _port, _backup_tgz = bf['Key'].split('/')
+
+            if _port == str(port):
+
+                date_ts.append(timeutil.parse_to_ts(_date_str, "%Y_%m_%d"))
+
+        if len(date_ts) != 0:
+            latest_date_str = timeutil.format_ts(max(date_ts), "%Y_%m_%d")
+        else:
+            latest_date_str = None
+
+        return latest_date_str
+
+    def check_backup_file(ports):
+
+        for port in ports:
+
+            conf = load_port_conf(port)
+
+            latest_date_str = get_latest_backup_date(port)
+
+            if latest_date_str is not None:
+
+                specified_date_ts = timeutil.parse_to_ts(
+                    conf['date_str'], "%Y_%m_%d")
+                latest_date_ts = timeutil.parse_to_ts(
+                    latest_date_str, "%Y_%m_%d")
+
+                if specified_date_ts > latest_date_ts:
+                    raise ValueError('port: {p} backup file:{d} is not found in s2'.format(
+                        p=repr(port), d=repr(conf['date_str'])))
+                else:
+                    setdef(conf, 'date_str', latest_date_str)
+                    logger.info('port: {p} backup file:{d} is ok'.format(
+                        p=repr(port), d=repr(conf['date_str'])))
+            else:
+                raise ValueError(
+                    'port: {p} is found any backup file is s2'.format(p=repr(port)))
+
     def worker(port):
 
         try:
@@ -121,17 +194,7 @@ if __name__ == "__main__":
 
     def _worker(port):
 
-        conf_path = '{conf_base}/{port}/{conf_fn}.yaml'.format(
-            conf_base=args.conf_base,
-            conf_fn=args.conf_fn,
-            port=port)
-
-        conf = mysqlbackup.load_conf_from_file(conf_path)
-
-        setdef(conf, 'date_str', args.date_str)
-        setdef(conf, 'clean_after_restore', args.clean_after_restore)
-
-        conf.setdefault('date_str', date_str)
+        conf = load_port_conf(port)
 
         mb = mysqlbackup.MysqlBackup(conf)
 
@@ -234,7 +297,6 @@ if __name__ == "__main__":
                            host=args.host,
                            privileges=[args.privilege.split(':', 1)],
                            binlog=(args.binlog == 1))
-
         else:
             raise ValueError('unsupported command: ' + repr(cmd))
 
@@ -246,15 +308,21 @@ if __name__ == "__main__":
         else:
             print json.dumps(rst, indent=2)
 
-    jm = jobq.JobManager([(worker, args.jobs),
-                          (output, 1)])
+    need_check_backup_cmds = ['check_backup_file',
+                              'restore_from_backup', 'restore']
 
-    for port in ports:
-        jm.put(port)
-
-    jm.join()
-
-    if len(rsts) == len(ports):
-        sys.exit(0)
+    if cmd in need_check_backup_cmds:
+        check_backup_file(ports)
     else:
-        sys.exit(1)
+        jm = jobq.JobManager([(worker, args.jobs),
+                              (output, 1)])
+
+        for port in ports:
+            jm.put(port)
+
+        jm.join()
+
+        if len(rsts) == len(ports):
+            sys.exit(0)
+        else:
+            sys.exit(1)
