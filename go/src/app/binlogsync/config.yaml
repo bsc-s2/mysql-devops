@@ -1,36 +1,69 @@
-Confs:
-    -
+worker1:
         WriteWorkerCnt: 2
 
         SourceConn:
-            Addr: 106.14.46.83:3308
-            Host: 106.14.46.83
-            Port: "3308"
-            User: root
-            Password: Password
-            DBName: db
+            Addr: 127.0.0.1:3333
+            Host: 127.0.0.1
+            Port: "3333"
+            User: admin
+            Password: password
+            DBName: mysql
 
         DBConfig:
-            4491:
-                Addr: 139.224.229.252:4491
-                Host: 139.224.229.252
-                Port: "4491"
-                User: root
-                Password: Password
-                DBName: db
+            4444:
+                Addr: 127.0.0.2:4444
+                Host: 127.0.0.2
+                Port: "4444"
+                User: admin
+                Password: password
+                DBName: mysql
 
         Shards:
             -
-                From: [1090000000000000096, u, 1.jpg, 0]
-                Table: key_1090000000000000096_u_1.jpg
-                DBPort: "4491"
+                From: [field0, field1, field2, ...]
+                Table: destination table
+                DBPort: "4444"
 
-        TableName: key_0000000000000000000__
-        TableField: ["bucket_id", "scope", "key", "ts", "is_del", "owner", "acl", "sha1", "ver", "md5", "crc32", "size", "file_meta", "group_id", "origo", "expires", "multipart"]
-        TableShard: ["bucket_id" , "scope", "key", "ts"]
-        TableIndex: ["bucket_id" , "scope", "key", "ts"]
+        TableName: sorce table
+        TableField: []
+        TableShard: []
+        TableIndex: []
 
-        GTIDSet: bad0552d-cb43-11e6-a6ef-00163e0e31a0:1-20482
-        BinlogFile: mysql-bin.000004
+        GTIDSet: string
+        BinlogFile: mysql-bin.000001
         BinlogPos: 4
-        TickCnt: 40
+
+worker2:
+        WriteWorkerCnt: 2
+
+        SourceConn:
+            Addr: 127.0.0.1:5555
+            Host: 127.0.0.1
+            Port: "5555"
+            User: admin
+            Password: password
+            DBName: mysql
+
+        DBConfig:
+            6666:
+                Addr: 127.0.0.2:6666
+                Host: 127.0.0.2
+                Port: "6666"
+                User: admin
+                Password: password
+                DBName: mysql
+
+        Shards:
+            -
+                From: [field0, field1, field2, ...]
+                Table: destination table
+                DBPort: "6666"
+
+        TableName: source table
+        TableField: []
+        TableShard: []
+        TableIndex: []
+
+        GTIDSet: string
+        BinlogFile: mysql-bin.000001
+        BinlogPos: 4

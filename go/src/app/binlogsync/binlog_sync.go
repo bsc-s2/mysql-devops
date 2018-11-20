@@ -47,12 +47,14 @@ type BinlogSyncer struct {
 
 	DBPool   map[string]*sql.DB
 	WriteChs []chan *WriteEvent
-	CountCh  chan *Status
+	CountCh  chan *Result
 
 	mutex    *sync.Mutex
 	wg       *sync.WaitGroup
 	shellLog *log.Logger
 	fileLog  *log.Logger
+
+	stat *Status
 
 	stop bool
 }
@@ -63,44 +65,47 @@ type BinlogPosition struct {
 	NextGTID   string `yaml:"GTID"`
 }
 
-type OutMessage struct {
-	Synced     int64          `yaml:"Synced"`
-	Faild      int64          `yaml:"Faild"`
+type Status struct {
+	Finished   int64          `yaml:"Finished"`
+	Failed     int64          `yaml:"Failed"`
+	Errors     map[string]int `yaml:"Errors"`
 	RowsPerSec float64        `yaml:"RowsPerSec"`
-	Position   BinlogPosition `yaml:"Position"`
-	Error      map[string]int `yaml:"Error"`
 }
 
-type Status struct {
+type Result struct {
 	err            error
 	goroutineIndex int
+
+	gtid string
 
 	position BinlogPosition
 }
 
-func NewBinlogSyncer(conf Config) *BinlogSyncer {
+func NewBinlogSyncer(conf *Config) *BinlogSyncer {
 	fileLog := log.New(logFile, "", log.Ldate|log.Ltime|log.Lshortfile)
 	fileLog.SetPrefix("[" + conf.SourceConn.Addr + "] ")
 
 	bs := &BinlogSyncer{
-		Config: conf,
+		Config: *conf,
 
 		DBPool:   make(map[string]*sql.DB),
 		WriteChs: make([]chan *WriteEvent, conf.WorkerCnt),
-		CountCh:  make(chan *Status, channelCapacity*conf.WorkerCnt),
+		CountCh:  make(chan *Result, channelCapacity*conf.WorkerCnt),
 
 		mutex:    &sync.Mutex{},
 		wg:       &sync.WaitGroup{},
 		shellLog: shellLog,
 		fileLog:  fileLog,
-		stop:     false,
+		stat: &Status{
+			Errors: make(map[string]int),
+		},
+		stop: false,
 	}
 
 	return bs
 }
 
 func (bs *BinlogSyncer) Sync() {
-	defer mainWG.Done()
 
 	var binlogReader *replication.BinlogStreamer
 	var err error
@@ -167,14 +172,14 @@ func (bs *BinlogSyncer) writeToDB(chIdx int, inCh chan *WriteEvent) {
 		if ev.event.Header.EventType == replication.ROTATE_EVENT {
 			rotateEv, _ := ev.event.Event.(*replication.RotateEvent)
 
-			stat := &Status{
+			rst := &Result{
 				goroutineIndex: chIdx,
 				position: BinlogPosition{
 					BinlogPos:  int64(rotateEv.Position),
 					BinlogFile: string(rotateEv.NextLogName),
 				},
 			}
-			bs.CountCh <- stat
+			bs.CountCh <- rst
 			continue
 		}
 
@@ -224,7 +229,7 @@ func (bs *BinlogSyncer) writeToDB(chIdx int, inCh chan *WriteEvent) {
 			}
 		}
 
-		stat := &Status{
+		rst := &Result{
 			err:            err,
 			goroutineIndex: chIdx,
 			position: BinlogPosition{
@@ -235,7 +240,7 @@ func (bs *BinlogSyncer) writeToDB(chIdx int, inCh chan *WriteEvent) {
 		}
 
 		bs.fileLog.Printf("routin index: %d, event position: %d\n", chIdx, ev.event.Header.LogPos)
-		bs.CountCh <- stat
+		bs.CountCh <- rst
 	}
 }
 
@@ -295,43 +300,34 @@ func (bs *BinlogSyncer) readBinlog(binlogReader *replication.BinlogStreamer) {
 }
 
 func (bs *BinlogSyncer) collector() {
-	var rowCnt int64
-	var errCnt int64
-	var errTypes = make(map[string]int)
 
 	var start = time.Now()
+	var tickCnt = int64(0)
 
-	for outStat := range bs.CountCh {
-		if outStat.err != nil {
-			errCnt += 1
-			errTypes[outStat.err.Error()] += 1
-		}
+	ticker := time.NewTicker(time.Duration(time.Minute * 1))
+	defer ticker.Stop()
 
-		rowCnt += 1
-
-		if rowCnt%bs.TickCnt == 0 {
-
-			rowsPerSec := float64(bs.TickCnt) / time.Since(start).Seconds()
-
-			om := &OutMessage{
-				Synced:     rowCnt,
-				Faild:      errCnt,
-				RowsPerSec: rowsPerSec,
-				Position:   outStat.position,
-				Error:      errTypes,
-			}
-
-			outMessage, err := marshalYAML(om)
-			if err != nil {
-				bs.fileLog.Printf("[%s] dump out message to YAML failed: %v\n", bs.SourceConn.Addr, outMessage)
-			}
-
-			outMessage = " ====== [" + bs.SourceConn.Addr + "] status ======\n" + outMessage
-			bs.shellLog.Printf(outMessage)
-
+	go func() {
+		for _ = range ticker.C {
+			bs.stat.RowsPerSec = float64(tickCnt) / time.Since(start).Seconds()
+			tickCnt = 0
 			start = time.Now()
 		}
+	}()
+
+	for rst := range bs.CountCh {
+		bs.stat.Finished += 1
+		tickCnt += 1
+
+		if rst.err != nil {
+			bs.stat.Errors[rst.err.Error()] += 1
+			bs.stat.Failed += 1
+		}
 	}
+}
+
+func (bs *BinlogSyncer) GetStat() *Status {
+	return bs.stat
 }
 
 func (bs *BinlogSyncer) getWriteConnection(row map[string]interface{}) (*DBInfo, error) {

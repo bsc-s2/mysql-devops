@@ -39,49 +39,46 @@ type Config struct {
 
 	BinlogFile string `yaml:"BinlogFile"`
 	BinlogPos  int32  `yaml:"BinlogPos"`
-
-	// TickCnt specifies every `TickCnt` rows synced got 1 status report
-	TickCnt int64 `yaml:"TickCnt"`
-}
-
-type ConfigList struct {
-	Confs []Config `yaml:"Confs"`
 }
 
 func main() {
 
-	// get arguments
-	getInput()
-
 	// set log
 	var err error
-	shellLog = log.New(os.Stdout, "", 0)
 	logFile, err = os.Create(logFileName)
 	if err != nil {
-		shellLog.Panicf("create log file failed: %v\n", err)
+		panic(fmt.Sprintf("create log file failed: %v\n", err))
 	}
 	defer logFile.Close()
 
+	shellLog = log.New(os.Stdout, "", 0)
+
 	// read config
-	confList := &ConfigList{}
-	err = unmarshalYAML(confName, &confList)
+	var confList = make(map[string]*Config)
+	err = unmarshalYAML(confName, confList)
 	if err != nil {
-		shellLog.Panicf("read config file failed: %v\n", err)
+		fmt.Printf("read config file failed: %v\n", err)
+		return
 	}
 
-	mainWG = &sync.WaitGroup{}
-	for _, conf := range confList.Confs {
+	controller := NewController()
+
+	for w, conf := range confList {
 		syncer := NewBinlogSyncer(conf)
-		mainWG.Add(1)
-		syncer.Sync()
+		controller.AddWorker(&Worker{
+			name:   w,
+			syncer: syncer,
+			config: conf,
+		})
+		go syncer.Sync()
 	}
-	mainWG.Wait()
+
+	controller.Listen("8888")
 }
 
-func getInput() {
+func init() {
 	flag.StringVar(&logFileName, "log", logFileName, "file name to output error log")
 	flag.StringVar(&confName, "config", confName, "configration file path")
 
 	flag.Parse()
-	fmt.Printf("log: %v, conf: %v\n", logFileName, confName)
 }
