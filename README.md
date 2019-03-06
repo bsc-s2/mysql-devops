@@ -12,6 +12,7 @@
   - [Other arguments](#other-arguments)
 - [How it works](#how-it-works)
   - [Dependency](#dependency)
+
 - [Author](#author)
 - [Copyright and License](#copyright-and-license)
 
@@ -337,6 +338,19 @@ If there is new write on bbb, it should be replicated to ccc too:
     pip install yaml
     pip install argparse
     ```
+
+#   Scripts
+
+It also provides with a collection of script for easing daily devops work.
+
+##  watch-slave.sh
+
+`watch-slave.sh <port>`
+
+Display replication status on `<port>`, refreshing every seconds.
+
+```
+```
 
 #   Author
 
