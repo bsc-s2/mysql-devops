@@ -9,7 +9,7 @@ for fn in $(ls /var/run/mysqld/*.sock); do
 
     mysql_cmd="./bin/mysql -s --socket=/var/run/mysqld/mysqld-${port}.sock -e "
 
-    echo "# $port"
+    echo "\033[31;40;1m #port: $port \033[0m"
     $mysql_cmd "$@"
 
 done
