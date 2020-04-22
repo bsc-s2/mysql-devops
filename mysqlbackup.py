@@ -468,7 +468,7 @@ class MysqlBackup(object):
             self.remove_backup(
                 'remove backup {backup_tgz_des3} {backup_data_dir} {backup_binlog_dir}')
 
-    def clean_binlog(self, before_days=1):
+    def clean_binlog(self, before_days=5):
 
         ts = timeutil.ts()
         ts = ts - 86400 * before_days
